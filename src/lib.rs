@@ -2,6 +2,25 @@
 // `pairing::bls12_381` types don't implement `Hash`, so we can't derive it.
 #![cfg_attr(feature = "cargo-clippy", allow(derive_hash_xor_eq))]
 
+#[cfg(test)]
+extern crate bincode;
+extern crate byteorder;
+#[macro_use]
+extern crate error_chain;
+extern crate init_with;
+#[macro_use]
+extern crate log;
+extern crate pairing;
+#[cfg(feature = "serialization-protobuf")]
+extern crate protobuf;
+extern crate rand;
+#[macro_use]
+extern crate rand_derive;
+extern crate ring;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+
 pub mod error;
 mod into_fr;
 pub mod poly;
@@ -20,10 +39,31 @@ use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rng, SeedableRng};
 use ring::digest;
 
-use self::error::{ErrorKind, Result};
-use self::into_fr::IntoFr;
-use self::poly::{Commitment, Poly};
-use fmt::HexBytes;
+use error::{ErrorKind, Result};
+use into_fr::IntoFr;
+use poly::{Commitment, Poly};
+
+/// Wrapper for a byte array, whose `Debug` implementation outputs shortened hexadecimal strings.
+pub struct HexBytes<'a>(pub &'a [u8]);
+
+impl<'a> fmt::Debug for HexBytes<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.0.len() > 6 {
+            for byte in &self.0[..3] {
+                write!(f, "{:02x}", byte)?;
+            }
+            write!(f, "..")?;
+            for byte in &self.0[(self.0.len() - 3)..] {
+                write!(f, "{:02x}", byte)?;
+            }
+        } else {
+            for byte in self.0 {
+                write!(f, "{:02x}", byte)?;
+            }
+        }
+        Ok(())
+    }
+}
 
 /// The number of words (`u32`) in a ChaCha RNG seed.
 const CHACHA_RNG_SEED_SIZE: usize = 8;
@@ -146,7 +186,7 @@ impl Signature {
 /// A signature share.
 // Note: Random signature shares can be generated for testing.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Rand, Hash)]
-pub struct SignatureShare(pub(crate) Signature);
+pub struct SignatureShare(pub Signature);
 
 impl fmt::Debug for SignatureShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
