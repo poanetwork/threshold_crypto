@@ -11,8 +11,6 @@ extern crate init_with;
 #[macro_use]
 extern crate log;
 extern crate pairing;
-#[cfg(feature = "serialization-protobuf")]
-extern crate protobuf;
 extern crate rand;
 #[macro_use]
 extern crate rand_derive;
@@ -24,8 +22,6 @@ extern crate serde_derive;
 pub mod error;
 mod into_fr;
 pub mod poly;
-#[cfg(feature = "serialization-protobuf")]
-pub mod protobuf_impl;
 pub mod serde_impl;
 
 use std::fmt;
