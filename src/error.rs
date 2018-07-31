@@ -9,5 +9,8 @@ pub enum Error {
     DuplicateEntry,
 }
 
+unsafe impl Send for Error {}
+unsafe impl Sync for Error {}
+
 /// A crypto result.
 pub type Result<T> = ::std::result::Result<T, Error>;
