@@ -12,9 +12,11 @@ categories = ["cryptography"]
 
 [dependencies]
 byteorder = "1.2.3"
+errno = "0.2.4"
 failure = "0.1"
 init_with = "1.1.0"
 log = "0.4.1"
+memsec = "0.5.4"
 pairing = { version = "0.14.2", features = ["u128-support"] }
 rand = "0.4.2"
 rand_derive = "0.3.1"
