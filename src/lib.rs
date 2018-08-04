@@ -5,11 +5,13 @@
 #[cfg(test)]
 extern crate bincode;
 extern crate byteorder;
+extern crate errno;
 #[macro_use]
 extern crate failure;
 extern crate init_with;
 #[macro_use]
 extern crate log;
+extern crate memsec;
 extern crate pairing;
 extern crate rand;
 #[macro_use]
@@ -26,18 +28,46 @@ pub mod serde_impl;
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::ptr::write_volatile;
+use std::mem::size_of_val;
+use std::ptr::{copy_nonoverlapping, write_volatile};
 
 use byteorder::{BigEndian, ByteOrder};
+use errno::errno;
 use init_with::InitWith;
+use memsec::{memzero, mlock, munlock};
 use pairing::bls12_381::{Bls12, Fr, G1, G1Affine, G2, G2Affine};
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
-use rand::{ChaChaRng, OsRng, Rng, SeedableRng};
+use rand::{ChaChaRng, OsRng, Rng, Rand, SeedableRng};
 use tiny_keccak::sha3_256;
 
 use error::{Error, Result};
 use into_fr::IntoFr;
 use poly::{Commitment, Poly};
+
+/// Marks a type as containing one or more secret prime field elements.
+pub(crate) trait ContainsSecret {
+    /// Calls the `mlock` system call on the region of memory allocated for the secret prime field
+    /// element or elements. This results in that region of memory not being being copied to disk,
+    /// either in a swap to disk or core dump. This method is called on every created instance of
+    /// a secret type.
+    ///
+    /// # Errors
+    ///
+    /// An `Error::MlockFailed` is returned if we failed to `mlock` the secret data.
+    fn mlock_secret_memory(&self) -> Result<()>;
+
+    /// Undoes the `mlock` on the secret region of memory via the `munlock` system call.
+    ///
+    /// # Errors
+    ///
+    /// An `Error::MunlockFailed` is returned if we failed to `munlock` the secret data; this
+    /// method is called on each secret type when it  goes out of scope.
+    fn munlock_secret_memory(&self) -> Result<()>;
+
+    /// Overwrites the secret prime field element or elements with zeros; this method is called on
+    /// each each secret type when it  goes out of scope.
+    fn zero_secret_memory(&self);
+}
 
 /// Wrapper for a byte array, whose `Debug` implementation outputs shortened hexadecimal strings.
 pub struct HexBytes<'a>(pub &'a [u8]);
@@ -192,47 +222,170 @@ impl fmt::Debug for SignatureShare {
     }
 }
 
-/// A secret key.
-#[derive(Clone, PartialEq, Eq, Rand)]
-pub struct SecretKey(Fr);
+/// A secret key; wraps a single prime field element. The field element is
+/// heap allocated to avoid any stack copying that result when passing
+/// `SecretKey`s between stack frames.
+#[derive(PartialEq, Eq)]
+pub struct SecretKey(Box<Fr>);
 
-impl fmt::Debug for SecretKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let uncomp = self.public_key().0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
-        write!(f, "SecretKey({:?})", HexBytes(bytes))
-    }
-}
-
+/// Creates a `SecretKey` containing the zero prime field element.
+///
+/// # Panics
+///
+/// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
+/// `SecretKey`.`
 impl Default for SecretKey {
     fn default() -> Self {
-        SecretKey(Fr::zero())
+        let mut fr = Fr::zero();
+        match SecretKey::from_mut_ptr(&mut fr as *mut Fr) {
+            Ok(sk) => sk,
+            Err(e) => panic!("Failed to create default `SecretKey`: {}", e),
+        }
     }
 }
 
+/// Creates a random `SecretKey`.
+///
+/// # Panics
+///
+/// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
+/// `SecretKey`.
+impl Rand for SecretKey {
+    fn rand<R: Rng>(rng: &mut R) -> Self {
+        let mut fr = Fr::rand(rng);
+        match SecretKey::from_mut_ptr(&mut fr as *mut Fr) {
+            Ok(sk) => sk,
+            Err(e) => panic!("Failed to create random `SecretKey`: {}", e),
+        }
+    }
+}
+
+/// Creates a new `SecretKey` by cloning another key's prime field element.
+///
+/// # Panics
+///
+/// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
+/// `SecretKey`.
+impl Clone for SecretKey {
+    fn clone(&self) -> Self {
+        let mut fr = *self.0;
+        match SecretKey::from_mut_ptr(&mut fr as *mut Fr) {
+            Ok(sk) => sk,
+            Err(e) => panic!("Failed to clone a new `SecretKey`: {}", e),
+        }
+    }
+}
+
+// A volatile overwrite of the prime field element's memory.
+//
+// # Panics
+//
+// Panics if we were unable to `munlock` the prime field element memory after it has been cleared.
 impl Drop for SecretKey {
     fn drop(&mut self) {
-        let ptr = self as *mut Self;
+        self.zero_secret_memory();
+        if let Err(e) = self.munlock_secret_memory() {
+            panic!("Failed to drop `SecretKey`: {}", e);
+        }
+    }
+}
+
+/// A debug statement where the secret prime field element is redacted.
+impl fmt::Debug for SecretKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SecretKey(...)")
+    }
+}
+
+impl ContainsSecret for SecretKey {
+    fn mlock_secret_memory(&self) -> Result<()> {
+        let ptr = &*self.0 as *const Fr as *mut u8;
+        let n_bytes = size_of_val(&*self.0);
+        let mlock_succeeded = unsafe { mlock(ptr, n_bytes) };
+        if mlock_succeeded {
+            Ok(())
+        } else {
+            let e = Error::MlockFailed {
+                errno: errno(),
+                addr: format!("{:?}", ptr),
+                n_bytes,
+            };
+            Err(e)
+        }
+    }
+
+    fn munlock_secret_memory(&self) -> Result<()> {
+        let ptr = &*self.0 as *const Fr as *mut u8;
+        let n_bytes = size_of_val(&*self.0);
+        let munlock_succeeded = unsafe { munlock(ptr, n_bytes) };
+        if munlock_succeeded {
+            Ok(())
+        } else {
+            let e = Error::MunlockFailed {
+                errno: errno(),
+                addr: format!("{:?}", ptr),
+                n_bytes,
+            };
+            Err(e)
+        }
+    }
+
+    fn zero_secret_memory(&self) {
+        let ptr = &*self.0 as *const Fr as *mut u8;
+        let n_bytes = size_of_val(&*self.0);
         unsafe {
-            write_volatile(ptr, SecretKey::default());
+            memzero(ptr, n_bytes);
         }
     }
 }
 
 impl SecretKey {
-    /// Creates a secret key from an existing value
-    pub fn from_value(f: Fr) -> Self {
-        SecretKey(f)
+    /// Creates a new `SecretKey` given a mutable raw pointer to a prime
+    /// field element. This constructor takes a pointer to avoid any
+    /// unnecessary stack copying/moving of secrets. The field element will
+    /// be copied bytewise onto the heap, the resulting `Box` is then
+    /// stored in the `SecretKey`.
+    ///
+    /// *WARNING* this constructor will overwrite the pointed to `Fr` element
+    /// with zeros after it has been copied onto the heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error::MlockFailed` if we have reached the systems's
+    /// locked memory limit.
+    #[cfg_attr(feature = "cargo-clippy", allow(not_unsafe_ptr_arg_deref))]
+    pub fn from_mut_ptr(fr_ptr: *mut Fr) -> Result<Self> {
+        let mut boxed_fr = Box::new(Fr::zero());
+        unsafe {
+            copy_nonoverlapping(fr_ptr, &mut *boxed_fr as *mut Fr, 1);
+            write_volatile(fr_ptr, Fr::zero());
+        }
+        let sk = SecretKey(boxed_fr);
+        sk.mlock_secret_memory()?;
+        Ok(sk)
+    }
+
+    /// Creates a new random instance of `SecretKey`. This is used
+    /// as a  wrapper around: `let sk: SecretKey = rand::random();`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if we have hit the system's locked memory limit when
+    /// `mlock`ing the new instance of `SecretKey`.
+    pub fn random() -> Self {
+        use rand::thread_rng;
+        let mut rng = thread_rng();
+        SecretKey::rand(&mut rng)
     }
 
     /// Returns the matching public key.
     pub fn public_key(&self) -> PublicKey {
-        PublicKey(G1Affine::one().mul(self.0))
+        PublicKey(G1Affine::one().mul(*self.0))
     }
 
     /// Signs the given element of `G2`.
     pub fn sign_g2<H: Into<G2Affine>>(&self, hash: H) -> Signature {
-        Signature(hash.into().mul(self.0))
+        Signature(hash.into().mul(*self.0))
     }
 
     /// Signs the given message.
@@ -246,8 +399,17 @@ impl SecretKey {
             return None;
         }
         let Ciphertext(ref u, ref v, _) = *ct;
-        let g = u.into_affine().mul(self.0);
+        let g = u.into_affine().mul(*self.0);
         Some(xor_vec(&hash_bytes(g, v.len()), v))
+    }
+
+    /// Generates a non-redacted debug string. This method differs from
+    /// the `Debug` implementation in that it *does* leak the secret prime
+    /// field element.
+    pub fn reveal(&self) -> String {
+        let uncomp = self.public_key().0.into_affine().into_uncompressed();
+        let bytes = uncomp.as_ref();
+        format!("SecretKey({:?})", HexBytes(bytes))
     }
 }
 
@@ -264,9 +426,21 @@ impl fmt::Debug for SecretKeyShare {
 }
 
 impl SecretKeyShare {
-    /// Creates a secret key share from an existing value
-    pub fn from_value(f: Fr) -> Self {
-        SecretKeyShare(SecretKey::from_value(f))
+    /// Creates a secret key share from an existing value. This constructor
+    /// takes a pointer to avoid any unnecessary stack copying/moving of
+    /// secrets. The field element will be copied bytewise onto the heap,
+    /// the resulting `Box` is then stored in the `SecretKey` which is then
+    /// wrapped in a `SecretKeyShare`.
+    ///
+    /// *WARNING* this constructor will overwrite the pointed to `Fr` element
+    /// with zeros once it has been copied into a new `SecretKeyShare`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error::MlockFailed` if we have reached the systems's
+    /// locked memory limit.
+    pub fn from_mut_ptr(fr_ptr: *mut Fr) -> Result<Self> {
+        SecretKey::from_mut_ptr(fr_ptr).map(SecretKeyShare)
     }
 
     /// Returns the matching public key share.
@@ -294,7 +468,16 @@ impl SecretKeyShare {
 
     /// Returns a decryption share, without validating the ciphertext.
     pub fn decrypt_share_no_verify(&self, ct: &Ciphertext) -> DecryptionShare {
-        DecryptionShare(ct.0.into_affine().mul((self.0).0))
+        DecryptionShare(ct.0.into_affine().mul(*(self.0).0))
+    }
+
+    /// Generates a non-redacted debug string. This method differs from
+    /// the `Debug` implementation in that it *does* leak the secret prime
+    /// field element.
+    pub fn reveal(&self) -> String {
+        let uncomp = self.0.public_key().0.into_affine().into_uncompressed();
+        let bytes = uncomp.as_ref();
+        format!("SecretKeyShare({:?})", HexBytes(bytes))
     }
 }
 
@@ -411,10 +594,9 @@ impl From<Poly> for SecretKeySet {
 impl SecretKeySet {
     /// Creates a set of secret key shares, where any `threshold + 1` of them can collaboratively
     /// sign and decrypt.
-    pub fn random<R: Rng>(threshold: usize, rng: &mut R) -> Self {
-        SecretKeySet {
-            poly: Poly::random(threshold, rng),
-        }
+    pub fn random<R: Rng>(threshold: usize, rng: &mut R) -> Result<Self> {
+        let poly = Poly::random(threshold, rng)?;
+        Ok(SecretKeySet { poly })
     }
 
     /// Returns the threshold `t`: any set of `t + 1` signature shares can be combined into a full
@@ -424,9 +606,9 @@ impl SecretKeySet {
     }
 
     /// Returns the `i`-th secret key share.
-    pub fn secret_key_share<T: IntoFr>(&self, i: T) -> SecretKeyShare {
-        let value = self.poly.evaluate(into_fr_plus_1(i));
-        SecretKeyShare(SecretKey(value))
+    pub fn secret_key_share<T: IntoFr>(&self, i: T) -> Result<SecretKeyShare> {
+        let mut fr = self.poly.evaluate(into_fr_plus_1(i));
+        SecretKeyShare::from_mut_ptr(&mut fr as *mut Fr)
     }
 
     /// Returns the corresponding public key set. That information can be shared publicly.
@@ -438,8 +620,9 @@ impl SecretKeySet {
 
     /// Returns the secret master key.
     #[cfg(test)]
-    fn secret_key(&self) -> SecretKey {
-        SecretKey(self.poly.evaluate(0))
+    fn secret_key(&self) -> Result<SecretKey> {
+        let mut fr = self.poly.evaluate(0);
+        SecretKey::from_mut_ptr(&mut fr as *mut Fr)
     }
 }
 
@@ -546,25 +729,47 @@ mod tests {
     #[test]
     fn test_threshold_sig() {
         let mut rng = rand::thread_rng();
-        let sk_set = SecretKeySet::random(3, &mut rng);
+        let sk_set = SecretKeySet::random(3, &mut rng).expect("Failed to create `SecretKeySet`");
         let pk_set = sk_set.public_keys();
+        let pk_master = pk_set.public_key();
 
         // Make sure the keys are different, and the first coefficient is the main key.
-        assert_ne!(pk_set.public_key(), pk_set.public_key_share(0).0);
-        assert_ne!(pk_set.public_key(), pk_set.public_key_share(1).0);
-        assert_ne!(pk_set.public_key(), pk_set.public_key_share(2).0);
+        assert_ne!(pk_master, pk_set.public_key_share(0).0);
+        assert_ne!(pk_master, pk_set.public_key_share(1).0);
+        assert_ne!(pk_master, pk_set.public_key_share(2).0);
 
         // Make sure we don't hand out the main secret key to anyone.
-        assert_ne!(sk_set.secret_key(), sk_set.secret_key_share(0).0);
-        assert_ne!(sk_set.secret_key(), sk_set.secret_key_share(1).0);
-        assert_ne!(sk_set.secret_key(), sk_set.secret_key_share(2).0);
+        let sk_master = sk_set
+            .secret_key()
+            .expect("Failed to create master `SecretKey`");
+        let sk_share_0 = sk_set
+            .secret_key_share(0)
+            .expect("Failed to create first `SecretKeyShare`")
+            .0;
+        let sk_share_1 = sk_set
+            .secret_key_share(1)
+            .expect("Failed to create second `SecretKeyShare`")
+            .0;
+        let sk_share_2 = sk_set
+            .secret_key_share(2)
+            .expect("Failed to create third `SecretKeyShare`")
+            .0;
+        assert_ne!(sk_master, sk_share_0);
+        assert_ne!(sk_master, sk_share_1);
+        assert_ne!(sk_master, sk_share_2);
 
         let msg = "Totally real news";
 
         // The threshold is 3, so 4 signature shares will suffice to recreate the share.
         let sigs: BTreeMap<_, _> = [5, 8, 7, 10]
-            .into_iter()
-            .map(|i| (*i, sk_set.secret_key_share(*i).sign(msg)))
+            .iter()
+            .map(|&i| {
+                let sig = sk_set
+                    .secret_key_share(i)
+                    .unwrap_or_else(|_| panic!("Failed to create `SecretKeyShare` #{}", i))
+                    .sign(msg);
+                (i, sig)
+            })
             .collect();
 
         // Each of the shares is a valid signature matching its public key share.
@@ -578,8 +783,14 @@ mod tests {
 
         // A different set of signatories produces the same signature.
         let sigs2: BTreeMap<_, _> = [42, 43, 44, 45]
-            .into_iter()
-            .map(|i| (*i, sk_set.secret_key_share(*i).sign(msg)))
+            .iter()
+            .map(|&i| {
+                let sig = sk_set
+                    .secret_key_share(i)
+                    .unwrap_or_else(|_| panic!("Failed to create `SecretKeyShare` #{}", i))
+                    .sign(msg);
+                (i, sig)
+            })
             .collect();
         let sig2 = pk_set.combine_signatures(&sigs2).expect("signatures match");
         assert_eq!(sig, sig2);
@@ -612,18 +823,21 @@ mod tests {
     #[test]
     fn test_threshold_enc() {
         let mut rng = rand::thread_rng();
-        let sk_set = SecretKeySet::random(3, &mut rng);
+        let sk_set = SecretKeySet::random(3, &mut rng).expect("Failed to create to `SecretKeySet`");
         let pk_set = sk_set.public_keys();
         let msg = b"Totally real news";
         let ciphertext = pk_set.public_key().encrypt(&msg[..]);
 
         // The threshold is 3, so 4 signature shares will suffice to decrypt.
         let shares: BTreeMap<_, _> = [5, 8, 7, 10]
-            .into_iter()
-            .map(|i| {
-                let ski = sk_set.secret_key_share(*i);
-                let share = ski.decrypt_share(&ciphertext).expect("ciphertext is valid");
-                (*i, share)
+            .iter()
+            .map(|&i| {
+                let dec_share = sk_set
+                    .secret_key_share(i)
+                    .unwrap_or_else(|_| panic!("Failed to create `SecretKeyShare` #{}", i))
+                    .decrypt_share(&ciphertext)
+                    .expect("ciphertext is valid");
+                (i, dec_share)
             })
             .collect();
 
