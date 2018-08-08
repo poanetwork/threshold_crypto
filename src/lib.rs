@@ -10,6 +10,8 @@ extern crate errno;
 extern crate failure;
 extern crate init_with;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate log;
 extern crate memsec;
 extern crate pairing;
@@ -26,6 +28,7 @@ mod into_fr;
 pub mod poly;
 pub mod serde_impl;
 
+use std::env;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::mem::size_of_val;
@@ -37,12 +40,29 @@ use init_with::InitWith;
 use memsec::{memzero, mlock, munlock};
 use pairing::bls12_381::{Bls12, Fr, G1, G1Affine, G2, G2Affine};
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
-use rand::{ChaChaRng, OsRng, Rng, Rand, SeedableRng};
+use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
 use tiny_keccak::sha3_256;
 
 use error::{Error, Result};
 use into_fr::IntoFr;
 use poly::{Commitment, Poly};
+
+lazy_static! {
+    // Sets whether or not `mlock`ing is enabled. Memory locking is enabled by default; it can be
+    // disabled by setting the environment variable `MLOCK_SECRETS=false`. This is useful when you
+    // are running on a system where you do not have the ability to increase the systems locked
+    // memory limit (which can be found using the Unix command: `ulimit -l`). For example, we
+    // disable `mlock`ing of secrets when testing crates that depend on `threshold_crypto` when
+    // running in Travis CI because Travis has a locked memory limit of 64kb, which we may exceed
+    // while running `cargo test`. Disabling `mlock`ing for secret values allows secret keys to be
+    // swapped/core-dumped to disk, resulting in unmanaged copies of secrets to hang around in
+    // memory; this is significantly less secure than enabling memory locking (the default). Only
+    // set `MLOCK_SECRETS=false` in development/testing.
+    pub(crate) static ref SHOULD_MLOCK_SECRETS: bool = match env::var("MLOCK_SECRETS") {
+        Ok(s) => s.parse().unwrap_or(true),
+        _ => true,
+    };
+}
 
 /// Marks a type as containing one or more secret prime field elements.
 pub(crate) trait ContainsSecret {
@@ -299,6 +319,9 @@ impl fmt::Debug for SecretKey {
 
 impl ContainsSecret for SecretKey {
     fn mlock_secret_memory(&self) -> Result<()> {
+        if !*SHOULD_MLOCK_SECRETS {
+            return Ok(());
+        }
         let ptr = &*self.0 as *const Fr as *mut u8;
         let n_bytes = size_of_val(&*self.0);
         let mlock_succeeded = unsafe { mlock(ptr, n_bytes) };
@@ -315,6 +338,9 @@ impl ContainsSecret for SecretKey {
     }
 
     fn munlock_secret_memory(&self) -> Result<()> {
+        if !*SHOULD_MLOCK_SECRETS {
+            return Ok(());
+        }
         let ptr = &*self.0 as *const Fr as *mut u8;
         let n_bytes = size_of_val(&*self.0);
         let munlock_succeeded = unsafe { munlock(ptr, n_bytes) };

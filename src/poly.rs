@@ -28,7 +28,7 @@ use pairing::bls12_381::{Fr, G1, G1Affine};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 
-use super::{ContainsSecret, Error, IntoFr, Result};
+use super::{ContainsSecret, Error, IntoFr, Result, SHOULD_MLOCK_SECRETS};
 
 /// A univariate polynomial in the prime field.
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
@@ -288,6 +288,9 @@ impl Drop for Poly {
 
 impl ContainsSecret for Poly {
     fn mlock_secret_memory(&self) -> Result<()> {
+        if !*SHOULD_MLOCK_SECRETS {
+            return Ok(());
+        }
         let ptr = self.coeff.as_ptr() as *mut u8;
         let n_bytes = size_of_val(self.coeff.as_slice());
         if n_bytes == 0 {
@@ -307,6 +310,9 @@ impl ContainsSecret for Poly {
     }
 
     fn munlock_secret_memory(&self) -> Result<()> {
+        if !*SHOULD_MLOCK_SECRETS {
+            return Ok(());
+        }
         let ptr = self.coeff.as_ptr() as *mut u8;
         let n_bytes = size_of_val(self.coeff.as_slice());
         if n_bytes == 0 {
@@ -510,6 +516,9 @@ impl Poly {
 
     // Removes the `mlock` for `len` elements that have been truncated from the `coeff` vector.
     fn truncate_mlock(&self, len: usize) -> Result<()> {
+        if !*SHOULD_MLOCK_SECRETS {
+            return Ok(());
+        }
         let n_bytes_truncated = len * size_of::<Fr>();
         if n_bytes_truncated == 0 {
             return Ok(());
@@ -532,6 +541,9 @@ impl Poly {
 
     // Extends the `mlock` on the `coeff` vector when `len` new elements are added.
     fn extend_mlock(&self, len: usize) -> Result<()> {
+        if !*SHOULD_MLOCK_SECRETS {
+            return Ok(());
+        }
         let n_bytes_extended = len * size_of::<Fr>();
         if n_bytes_extended == 0 {
             return Ok(());
@@ -684,6 +696,9 @@ impl Debug for BivarPoly {
 
 impl ContainsSecret for BivarPoly {
     fn mlock_secret_memory(&self) -> Result<()> {
+        if !*SHOULD_MLOCK_SECRETS {
+            return Ok(());
+        }
         let ptr = self.coeff.as_ptr() as *mut u8;
         let n_bytes = size_of_val(self.coeff.as_slice());
         if n_bytes == 0 {
@@ -703,6 +718,9 @@ impl ContainsSecret for BivarPoly {
     }
 
     fn munlock_secret_memory(&self) -> Result<()> {
+        if !*SHOULD_MLOCK_SECRETS {
+            return Ok(());
+        }
         let ptr = self.coeff.as_ptr() as *mut u8;
         let n_bytes = size_of_val(self.coeff.as_slice());
         if n_bytes == 0 {
