@@ -18,9 +18,9 @@ log = "0.4.1"
 pairing = { version = "0.14.2", features = ["u128-support"] }
 rand = "0.4.2"
 rand_derive = "0.3.1"
-ring = "^0.12"
 serde = "1.0.55"
 serde_derive = "1.0.55"
+tiny-keccak = "1.4"
 
 [dev-dependencies]
 bincode = "1.0.0"
