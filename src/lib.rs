@@ -14,10 +14,10 @@ extern crate pairing;
 extern crate rand;
 #[macro_use]
 extern crate rand_derive;
-extern crate ring;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate tiny_keccak;
 
 pub mod error;
 mod into_fr;
@@ -33,7 +33,7 @@ use init_with::InitWith;
 use pairing::bls12_381::{Bls12, Fr, G1, G1Affine, G2, G2Affine};
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rng, SeedableRng};
-use ring::digest;
+use tiny_keccak::sha3_256;
 
 use error::{Error, Result};
 use into_fr::IntoFr;
@@ -445,7 +445,7 @@ impl SecretKeySet {
 
 /// Returns a hash of the given message in `G2`.
 fn hash_g2<M: AsRef<[u8]>>(msg: M) -> G2 {
-    let digest = digest::digest(&digest::SHA256, msg.as_ref());
+    let digest = sha3_256(msg.as_ref());
     let seed = <[u32; CHACHA_RNG_SEED_SIZE]>::init_with_indices(|i| {
         BigEndian::read_u32(&digest.as_ref()[(4 * i)..(4 * i + 4)])
     });
@@ -458,8 +458,7 @@ fn hash_g1_g2<M: AsRef<[u8]>>(g1: G1, msg: M) -> G2 {
     // If the message is large, hash it, otherwise copy it.
     // TODO: Benchmark and optimize the threshold.
     let mut msg = if msg.as_ref().len() > 64 {
-        let digest = digest::digest(&digest::SHA256, msg.as_ref());
-        digest.as_ref().to_vec()
+        sha3_256(msg.as_ref()).to_vec()
     } else {
         msg.as_ref().to_vec()
     };
@@ -469,7 +468,7 @@ fn hash_g1_g2<M: AsRef<[u8]>>(g1: G1, msg: M) -> G2 {
 
 /// Returns a hash of the group element with the specified length in bytes.
 fn hash_bytes(g1: G1, len: usize) -> Vec<u8> {
-    let digest = digest::digest(&digest::SHA256, g1.into_affine().into_compressed().as_ref());
+    let digest = sha3_256(g1.into_affine().into_compressed().as_ref());
     let seed = <[u32; CHACHA_RNG_SEED_SIZE]>::init_with_indices(|i| {
         BigEndian::read_u32(&digest.as_ref()[(4 * i)..(4 * i + 4)])
     });
