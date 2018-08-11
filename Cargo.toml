@@ -1,12 +1,13 @@
 [package]
 name = "threshold_crypto"
+# REMINDER: Update version in `README.md` when incrementing:
 version = "0.1.0"
 authors = ["Andreas Fackler <AndreasFackler@gmx.de>",
            "Peter van Nostrand <jnz@riseup.net>"]
 description = "Pairing threshold cryptography"
-license = "LGPL-3.0"
+license = "MIT/Apache-2.0"
 repository = "https://github.com/poanetwork/threshold_crypto"
-readme = "https://github.com/poanetwork/threshold_crypto/blob/master/README.md"
+readme = "README.md"
 keywords = ["pairing", "threshold"]
 categories = ["cryptography"]
 
