@@ -1,5 +1,5 @@
+use ff::{Field, PrimeField};
 use pairing::bls12_381::Fr;
-use pairing::{Field, PrimeField};
 
 /// A conversion into an element of the field `Fr`.
 pub trait IntoFr: Copy {

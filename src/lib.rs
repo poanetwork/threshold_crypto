@@ -8,6 +8,7 @@ extern crate byteorder;
 extern crate errno;
 #[macro_use]
 extern crate failure;
+extern crate ff;
 extern crate init_with;
 #[macro_use]
 extern crate lazy_static;
@@ -36,10 +37,11 @@ use std::ptr::{copy_nonoverlapping, write_volatile};
 
 use byteorder::{BigEndian, ByteOrder};
 use errno::errno;
+use ff::Field;
 use init_with::InitWith;
 use memsec::{memzero, mlock, munlock};
 use pairing::bls12_381::{Bls12, Fr, G1, G1Affine, G2, G2Affine};
-use pairing::{CurveAffine, CurveProjective, Engine, Field};
+use pairing::{CurveAffine, CurveProjective, Engine};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
 use tiny_keccak::sha3_256;
 

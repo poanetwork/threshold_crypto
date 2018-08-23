@@ -86,7 +86,7 @@ pub mod field_vec {
     use std::borrow::Borrow;
     use std::marker::PhantomData;
 
-    use pairing::{PrimeField, PrimeFieldRepr};
+    use ff::{PrimeField, PrimeFieldRepr};
     use serde::de::Error as DeserializeError;
     use serde::ser::Error as SerializeError;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
