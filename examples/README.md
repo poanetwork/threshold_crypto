@@ -1,5 +1,11 @@
 # Examples
 
+- [`Public-Key Cryptography`](basic_pkc.rs) - Demonstrates how to generate a
+random secret-key and corresponding public-key, sign some bytes using a
+secret-key, validate the signature for some bytes using a public-key, encrypt
+some bytes using a public-key, and how to decrypt a ciphertext using a
+secret-key.
+
 - [`Threshold Encryption`](threshold_enc.rs) - Demonstrates how to encrypt a
 message to a group of actors with a master public-key, where the number of
 actors collaborating in the decryption process must exceed a given threshold
