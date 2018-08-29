@@ -93,6 +93,17 @@ must tolerate up to `t` adversarial (malicious or faulty) nodes. Because `t +
 1` nodes are required to sign or reveal information, messages can be trusted
 by third-parties as representing the consensus of the network.
 
+## Performance
+
+Benchmarking functionality is kept in the [`benches` directory](benches). You
+can run the benchmarks with the following command:
+
+```
+$ RUSTFLAGS="-C target_cpu=native" cargo bench
+```
+
+We use the [`criterion`](https://crates.io/crates/criterion) benchmarking library.
+
 ## License
 
 Licensed under either of:
