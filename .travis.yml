@@ -18,7 +18,8 @@ before_install:
 env:
   global:
     - RUST_BACKTRACE=1
-    - RUSTFLAGS="-D warnings"
+    # Enables additional cpu-specific optimizations.
+    - RUSTFLAGS="-D warnings -C target-cpu=native"
     # Note: Currently (as of 2018-07-13), `clippy-preview` is only in the nightly
     #       release. A version of `rustfmt` that supports the `--check` option
     #       is also not in stable yet.
