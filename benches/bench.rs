@@ -1,29 +1,45 @@
 #[macro_use]
 extern crate criterion;
+extern crate pairing;
 extern crate rand;
 extern crate threshold_crypto;
 
 use criterion::Criterion;
+use pairing::bls12_381::Fr;
 use threshold_crypto::poly::Poly;
 
 mod poly_benches {
     use super::*;
+    use rand::Rng;
 
-    // Benchmarks multiplication of two degree 3 polynomials.
+    // Benchmarks multiplication of two polynomials.
     fn multiplication(c: &mut Criterion) {
         let mut rng = rand::thread_rng();
-        let lhs = Poly::random(3, &mut rng).unwrap();
-        let rhs = Poly::random(3, &mut rng).unwrap();
-        c.bench_function("Polynomial multiplication", move |b| b.iter(|| &lhs * &rhs));
+        c.bench_function_over_inputs(
+            "Polynomial multiplication",
+            move |b, &&deg| {
+                let rand_factors = || {
+                    let lhs = Poly::random(deg, &mut rng).unwrap();
+                    let rhs = Poly::random(deg, &mut rng).unwrap();
+                    (lhs, rhs)
+                };
+                b.iter_with_setup(rand_factors, |(lhs, rhs)| &lhs * &rhs)
+            },
+            &[5, 10, 20, 40],
+        );
     }
 
-    // Benchmarks Lagrange interpolation for a degree 3 polynomial.
+    // Benchmarks Lagrange interpolation for a polynomial.
     fn interpolate(c: &mut Criterion) {
-        // Points from the the polynomial: `y(x) = 5x^3 + 0x^2 + x - 2`.
-        let sample_points = vec![(-1, -8), (2, 40), (3, 136), (5, 628)];
-        c.bench_function("Polynomial interpolation", move |b| {
-            b.iter(|| Poly::interpolate(sample_points.clone()).unwrap())
-        });
+        let mut rng = rand::thread_rng();
+        c.bench_function_over_inputs(
+            "Polynomial interpolation",
+            move |b, &&deg| {
+                let rand_samples = || (0..=deg).map(|i| (i, rng.gen::<Fr>())).collect::<Vec<_>>();
+                b.iter_with_setup(rand_samples, |samples| Poly::interpolate(samples).unwrap())
+            },
+            &[5, 10, 20, 40],
+        );
     }
 
     criterion_group!{

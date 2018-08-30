@@ -66,18 +66,18 @@ Disabling memory locking is useful because it removes the possibility of tests f
 
 ## Application Details
 
-The basic usage outline is: 
+The basic usage outline is:
 * choose a threshold value `t`
 * create a key set
 * distribute `N` secret key shares among the participants
-* publish the public master key 
+* publish the public master key
 
 A third party can now encrypt a message to the public master key
 and any set of `t + 1` participants *(but no fewer!)* can collaborate to
 decrypt it. Also, any set of `t + 1` participants can collaborate to sign a message,
 producing a signature that is verifiable with the public master key.
 
-In this system, a signature is unique and independent of  
+In this system, a signature is unique and independent of
 the set of participants that produced it. If `S1` and `S2` are
 signatures for the same message, produced by two different sets of `t + 1`
 secret key share holders, both signatures will be valid AND
