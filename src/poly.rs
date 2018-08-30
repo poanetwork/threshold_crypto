@@ -23,9 +23,10 @@ use std::mem::{size_of, size_of_val};
 use std::{cmp, iter, ops};
 
 use errno::errno;
+use ff::Field;
 use memsec::{memzero, mlock, munlock};
 use pairing::bls12_381::{Fr, G1, G1Affine};
-use pairing::{CurveAffine, CurveProjective, Field};
+use pairing::{CurveAffine, CurveProjective};
 use rand::Rng;
 
 use super::{ContainsSecret, Error, IntoFr, Result, SHOULD_MLOCK_SECRETS};
@@ -927,8 +928,9 @@ mod tests {
 
     use super::{coeff_pos, BivarPoly, IntoFr, Poly};
 
+    use ff::Field;
     use pairing::bls12_381::{Fr, G1Affine};
-    use pairing::{CurveAffine, Field};
+    use pairing::CurveAffine;
     use rand;
 
     #[test]

@@ -15,11 +15,13 @@ categories = ["cryptography"]
 byteorder = "1.2.3"
 errno = "0.2.4"
 failure = "0.1"
+ff = "0.4.0"
 init_with = "1.1.0"
 lazy_static = "1.1.0"
 log = "0.4.1"
 memsec = "0.5.4"
-pairing = { version = "0.14.2", features = ["u128-support"] }
+# pairing = { version = "0.14.2", features = ["u128-support"] }
+pairing = { git = "https://github.com/zkcrypto/pairing", rev = "183a64b08e9dc7067f78624ec161371f1829623e" }
 rand = "0.4.2"
 rand_derive = "0.3.1"
 serde = "1.0.55"
