@@ -1,5 +1,11 @@
 # Examples
 
+Run examples using:
+
+```
+$ MLOCK_SECRETS=false cargo run --example <example name>
+```
+
 - [`Public-Key Cryptography`](basic_pkc.rs) - Demonstrates how to generate a
 random secret-key and corresponding public-key, sign some bytes using a
 secret-key, validate the signature for some bytes using a public-key, encrypt
