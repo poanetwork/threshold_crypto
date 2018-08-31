@@ -24,7 +24,7 @@ use std::{cmp, iter, ops};
 
 use errno::errno;
 use memsec::{memzero, mlock, munlock};
-use pairing::bls12_381::{Fr, G1, G1Affine};
+use pairing::bls12_381::{Fr, G1Affine, G1};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 
@@ -221,8 +221,7 @@ impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
                     c.add_assign(&s);
                 }
                 c
-            })
-            .collect();
+            }).collect();
 
         match Poly::new(coeff) {
             Ok(poly) => poly,
@@ -803,8 +802,7 @@ impl BivarPoly {
                     result.add_assign(&summand);
                 }
                 result
-            })
-            .collect();
+            }).collect();
         Poly::new(coeff)
     }
 
@@ -887,8 +885,7 @@ impl BivarCommitment {
                     result.add_assign(&summand);
                 }
                 result
-            })
-            .collect();
+            }).collect();
         Commitment { coeff }
     }
 
@@ -906,8 +903,7 @@ fn powers<T: IntoFr>(into_x: T, degree: usize) -> Vec<Fr> {
         .chain((0..degree).map(|_| {
             x_pow_i.mul_assign(&x);
             x_pow_i
-        }))
-        .collect()
+        })).collect()
 }
 
 /// Returns the position of coefficient `(i, j)` in the vector describing a symmetric bivariate
@@ -977,8 +973,7 @@ mod tests {
             .map(|_| {
                 BivarPoly::random(faulty_num, &mut rng)
                     .expect("Failed to create random `BivarPoly`")
-            })
-            .collect();
+            }).collect();
         let pub_bi_commits: Vec<_> = bi_polys.iter().map(BivarPoly::commitment).collect();
 
         let mut sec_keys = vec![Fr::zero(); node_num];

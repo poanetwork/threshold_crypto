@@ -53,8 +53,7 @@ impl ChatNetwork {
                 let sk_share = sk_set.secret_key_share(id).unwrap();
                 let pk_share = pk_set.public_key_share(id);
                 Node::new(id, sk_share, pk_share)
-            })
-            .collect();
+            }).collect();
 
         ChatNetwork {
             pk_set,
@@ -94,22 +93,23 @@ impl ChatNetwork {
     // signature shares (i.e. has been signed by `threshold + 1` nodes).
     fn run_consensus(&self) -> Option<(UserId, Msg, Signature)> {
         // Create a new `MsgDatabase` of every message that has been signed by a validator node.
-        let all_pending: MsgDatabase = self.nodes.iter().fold(
-            BTreeMap::new(),
-            |mut all_pending, node| {
-                for (user_id, signed_msgs) in &node.pending {
-                    let mut user_msgs = all_pending.entry(*user_id).or_insert_with(BTreeMap::new);
-                    for (msg, sigs) in signed_msgs.iter() {
-                        let sigs = sigs.iter().cloned();
-                        user_msgs
-                            .entry(msg.to_string())
-                            .or_insert_with(Vec::new)
-                            .extend(sigs);
+        let all_pending: MsgDatabase =
+            self.nodes
+                .iter()
+                .fold(BTreeMap::new(), |mut all_pending, node| {
+                    for (user_id, signed_msgs) in &node.pending {
+                        let mut user_msgs =
+                            all_pending.entry(*user_id).or_insert_with(BTreeMap::new);
+                        for (msg, sigs) in signed_msgs.iter() {
+                            let sigs = sigs.iter().cloned();
+                            user_msgs
+                                .entry(msg.to_string())
+                                .or_insert_with(Vec::new)
+                                .extend(sigs);
+                        }
                     }
-                }
-                all_pending
-            },
-        );
+                    all_pending
+                });
 
         // Iterate over the `MsgDatabase` numerically by user ID, then iterate over each user's
         // messages alphabetically. Try to combine the validator signatures. The first message that

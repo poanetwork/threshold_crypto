@@ -35,8 +35,7 @@ impl SecretSociety {
                 let sk_share = sk_set.secret_key_share(id).unwrap();
                 let pk_share = pk_set.public_key_share(id);
                 Actor::new(id, sk_share, pk_share)
-            })
-            .collect();
+            }).collect();
 
         SecretSociety { actors, pk_set }
     }

@@ -38,7 +38,7 @@ use byteorder::{BigEndian, ByteOrder};
 use errno::errno;
 use init_with::InitWith;
 use memsec::{memzero, mlock, munlock};
-use pairing::bls12_381::{Bls12, Fr, G1, G1Affine, G2, G2Affine};
+use pairing::bls12_381::{Bls12, Fr, G1Affine, G2Affine, G1, G2};
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
 use tiny_keccak::sha3_256;
@@ -795,8 +795,7 @@ mod tests {
                     .unwrap_or_else(|_| panic!("Failed to create `SecretKeyShare` #{}", i))
                     .sign(msg);
                 (i, sig)
-            })
-            .collect();
+            }).collect();
 
         // Each of the shares is a valid signature matching its public key share.
         for (i, sig) in &sigs {
@@ -816,8 +815,7 @@ mod tests {
                     .unwrap_or_else(|_| panic!("Failed to create `SecretKeyShare` #{}", i))
                     .sign(msg);
                 (i, sig)
-            })
-            .collect();
+            }).collect();
         let sig2 = pk_set.combine_signatures(&sigs2).expect("signatures match");
         assert_eq!(sig, sig2);
     }
@@ -864,8 +862,7 @@ mod tests {
                     .decrypt_share(&ciphertext)
                     .expect("ciphertext is valid");
                 (i, dec_share)
-            })
-            .collect();
+            }).collect();
 
         // Each of the shares is valid matching its public key share.
         for (i, share) in &shares {
