@@ -211,22 +211,22 @@ impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
     type Output = Poly;
 
     fn mul(self, rhs: B) -> Self::Output {
-        let coeff: Vec<Fr> = (0..(self.coeff.len() + rhs.borrow().coeff.len() - 1))
-            .map(|i| {
-                // TODO: clear these secrets from the stack.
-                let mut c = Fr::zero();
-                for j in i.saturating_sub(rhs.borrow().degree())..(1 + cmp::min(i, self.degree())) {
-                    let mut s = self.coeff[j];
-                    s.mul_assign(&rhs.borrow().coeff[i - j]);
-                    c.add_assign(&s);
-                }
-                c
-            }).collect();
-
-        match Poly::new(coeff) {
-            Ok(poly) => poly,
-            Err(e) => panic!("Failed to create a new `Poly` duing muliplication: {}", e),
+        let rhs = rhs.borrow();
+        if rhs.coeff.is_empty() || self.coeff.is_empty() {
+            return Poly::zero().expect("failed to create zero Poly");
         }
+        let mut coeff = vec![Fr::zero(); self.coeff.len() + rhs.borrow().coeff.len() - 1];
+        let mut s; // TODO: Mlock and zero on drop.
+        for (i, cs) in self.coeff.iter().enumerate() {
+            for (j, cr) in rhs.coeff.iter().enumerate() {
+                s = *cs;
+                s.mul_assign(cr);
+                coeff[i + j].add_assign(&s);
+            }
+        }
+        Poly::new(coeff).unwrap_or_else(|e| {
+            panic!("Failed to create a new `Poly` during muliplication: {}", e);
+        })
     }
 }
 
@@ -244,14 +244,26 @@ impl<B: Borrow<Self>> ops::MulAssign<B> for Poly {
     }
 }
 
+impl ops::MulAssign<Fr> for Poly {
+    fn mul_assign(&mut self, rhs: Fr) {
+        if rhs.is_zero() {
+            *self = Poly::zero().expect("failed to create zero Poly");
+        } else {
+            for c in &mut self.coeff {
+                c.mul_assign(&rhs);
+            }
+        }
+    }
+}
+
 /// # Panics
 ///
 /// This operation may panic if: when multiplying the polynomial by a zero field element, we fail
 /// to munlock the cleared `coeff` vector.
-impl<'a> ops::Mul<Fr> for Poly {
+impl<'a> ops::Mul<&'a Fr> for Poly {
     type Output = Poly;
 
-    fn mul(mut self, rhs: Fr) -> Self::Output {
+    fn mul(mut self, rhs: &Fr) -> Self::Output {
         if rhs.is_zero() {
             self.zero_secret_memory();
             if let Err(e) = self.munlock_secret_memory() {
@@ -259,13 +271,38 @@ impl<'a> ops::Mul<Fr> for Poly {
             }
             self.coeff.clear();
         } else {
-            self.coeff.iter_mut().for_each(|c| c.mul_assign(&rhs));
+            self.coeff.iter_mut().for_each(|c| c.mul_assign(rhs));
         }
         self
     }
 }
 
-impl<'a> ops::Mul<u64> for Poly {
+impl ops::Mul<Fr> for Poly {
+    type Output = Poly;
+
+    fn mul(self, rhs: Fr) -> Self::Output {
+        let rhs = &rhs;
+        self * rhs
+    }
+}
+
+impl<'a> ops::Mul<&'a Fr> for &'a Poly {
+    type Output = Poly;
+
+    fn mul(self, rhs: &Fr) -> Self::Output {
+        (*self).clone() * rhs
+    }
+}
+
+impl<'a> ops::Mul<Fr> for &'a Poly {
+    type Output = Poly;
+
+    fn mul(self, rhs: Fr) -> Self::Output {
+        (*self).clone() * rhs
+    }
+}
+
+impl ops::Mul<u64> for Poly {
     type Output = Poly;
 
     fn mul(self, rhs: u64) -> Self::Output {
@@ -436,7 +473,7 @@ impl Poly {
 
     /// Returns the degree.
     pub fn degree(&self) -> usize {
-        self.coeff.len() - 1
+        self.coeff.len().saturating_sub(1)
     }
 
     /// Returns the value at the point `i`.
@@ -482,35 +519,35 @@ impl Poly {
     /// Returns an `Error::MlockFailed` if we hit the system's locked memory limit and failed to
     /// `mlock` the new `Poly` instance.
     fn compute_interpolation(samples: &[(Fr, Fr)]) -> Result<Self> {
+        let mut poly; // Interpolates on the first `i` samples.
+        let mut base; // Is zero on the first `i` samples.
         if samples.is_empty() {
             return Poly::zero();
-        } else if samples.len() == 1 {
-            return Poly::constant(samples[0].1);
+        } else {
+            poly = Poly::constant(samples[0].1)?;
+            let mut minus_s0 = samples[0].0;
+            minus_s0.negate();
+            base = Poly::new(vec![minus_s0, Fr::one()])?;
         }
-        // The degree is at least 1 now.
-        let degree = samples.len() - 1;
-        // Interpolate all but the last sample.
-        let prev = Self::compute_interpolation(&samples[..degree])?;
-        let (x, mut y) = samples[degree]; // The last sample.
-        y.sub_assign(&prev.evaluate(x));
-        let step = Self::lagrange(x, &samples[..degree])?;
-        Self::constant(y).map(|poly| poly * step + prev)
-    }
 
-    /// Returns the Lagrange base polynomial that is `1` in `p` and `0` in every `samples[i].0`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we hit the system's locked memory limit.
-    fn lagrange(p: Fr, samples: &[(Fr, Fr)]) -> Result<Self> {
-        let mut result = Self::one()?;
-        for &(sx, _) in samples {
-            let mut denom = p;
-            denom.sub_assign(&sx);
-            denom = denom.inverse().expect("sample points must be distinct");
-            result *= (Self::identity()? - Self::constant(sx)?) * Self::constant(denom)?;
+        // We update `base` so that it is always zero on all previous samples, and `poly` so that
+        // it has the correct values on the previous samples.
+        for (ref x, ref y) in &samples[1..] {
+            // Scale `base` so that its value at `x` is the difference between `y` and `poly`'s
+            // current value at `x`: Adding it to `poly` will then make it correct for `x`.
+            let mut diff = *y;
+            diff.sub_assign(&poly.evaluate(x));
+            let mut base_val = base.evaluate(x);
+            diff.mul_assign(&base_val.inverse().expect("sample points must be distinct"));
+            base *= diff;
+            poly += &base;
+
+            // Finally, multiply `base` by X - x, so that it is zero at `x`, too, now.
+            let mut minus_x = *x;
+            minus_x.negate();
+            base *= Poly::new(vec![minus_x, Fr::one()])?;
         }
-        Ok(result)
+        Ok(poly)
     }
 
     // Removes the `mlock` for `len` elements that have been truncated from the `coeff` vector.
