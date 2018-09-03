@@ -26,6 +26,7 @@ extern crate tiny_keccak;
 pub mod error;
 mod into_fr;
 pub mod poly;
+pub mod poly_vals;
 pub mod serde_impl;
 
 use std::env;

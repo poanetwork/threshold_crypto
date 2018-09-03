@@ -29,6 +29,34 @@ mod poly_benches {
         );
     }
 
+    // Benchmarks multiplication of two polynomials using their Fourier transform.
+    fn multiplication_fft(c: &mut Criterion) {
+        let mut rng = rand::thread_rng();
+        c.bench_function_over_inputs(
+            "Polynomial multiplication using FFT",
+            move |b, &&deg: &&usize| {
+                let log_n = deg.next_power_of_two().trailing_zeros() as usize + 1;
+                let rand_factors = || {
+                    let lhs = Poly::random(deg, &mut rng).unwrap();
+                    let rhs = Poly::random(deg, &mut rng).unwrap();
+                    (lhs, rhs)
+                };
+                b.iter_with_setup(rand_factors, |(lhs, rhs)| {
+                    let lhs_fft = lhs
+                        .fourier_transform(log_n)
+                        .expect("failed to apply Fourier transform");
+                    let rhs_fft = rhs
+                        .fourier_transform(log_n)
+                        .expect("failed to apply Fourier transform");
+                    (lhs_fft * rhs_fft)
+                        .inverse_fourier_transform()
+                        .expect("failed to apply inverse Fourier transform");
+                })
+            },
+            &[5, 10, 20, 40],
+        );
+    }
+
     // Benchmarks Lagrange interpolation for a polynomial.
     fn interpolate(c: &mut Criterion) {
         let mut rng = rand::thread_rng();
@@ -45,7 +73,7 @@ mod poly_benches {
     criterion_group!{
         name = poly_benches;
         config = Criterion::default();
-        targets = multiplication, interpolate,
+        targets = multiplication, multiplication_fft, interpolate,
     }
 }
 

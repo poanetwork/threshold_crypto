@@ -25,10 +25,11 @@ use std::{cmp, iter, ops};
 use errno::errno;
 use memsec::{memzero, mlock, munlock};
 use pairing::bls12_381::{Fr, G1Affine, G1};
-use pairing::{CurveAffine, CurveProjective, Field};
+use pairing::{CurveAffine, CurveProjective, Field, PrimeField};
 use rand::Rng;
 
 use super::{ContainsSecret, Error, IntoFr, Result, SHOULD_MLOCK_SECRETS};
+use poly_vals::{fourier_transform, PolyVals};
 
 /// A univariate polynomial in the prime field.
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
@@ -348,8 +349,9 @@ impl Poly {
     ///
     /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
     pub fn new(coeff: Vec<Fr>) -> Result<Self> {
-        let poly = Poly { coeff };
+        let mut poly = Poly { coeff };
         poly.mlock_secret_memory()?;
+        poly.remove_zeros()?;
         Ok(poly)
     }
 
@@ -361,6 +363,17 @@ impl Poly {
     pub fn random<R: Rng>(degree: usize, rng: &mut R) -> Result<Self> {
         let coeff: Vec<Fr> = (0..=degree).map(|_| rng.gen()).collect();
         Poly::new(coeff)
+    }
+
+    /// Returns the Fourier transform of this polynomial.
+    pub fn fourier_transform(&self, log_n: usize) -> Result<PolyVals> {
+        // The canonical primitive `n`-th root of unity.
+        let mut root = Fr::root_of_unity();
+        for _ in log_n..(Fr::S as usize) {
+            root.square();
+        }
+        let vals = fourier_transform(log_n, &self.coeff, &root);
+        PolyVals::new(log_n, vals)
     }
 
     /// Returns the polynomial with constant value `0`.
