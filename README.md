@@ -46,6 +46,20 @@ fn main() {
 }
 ```
 
+### Testing
+
+Run tests using the following command:
+
+```
+$ MLOCK_SECRETS=false cargo test
+```
+
+The test suite runs quickly without setting the envvar `MLOCK_SECRETS=false`,
+but runs even faster when it is set. Setting this envvar also ensures that
+tests won't fail if we reach the testing system's locked memory limit (which
+we won't hit unless the system's locked memory limit is set unreasonably low,
+i.e. 1-2 pages or the equivalent, 4-8 kilobytes).
+
 ### Examples
 
 Run examples from the [`examples`](examples) directory using:
