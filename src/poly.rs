@@ -212,6 +212,9 @@ impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
 
     fn mul(self, rhs: B) -> Self::Output {
         let rhs = rhs.borrow();
+        if rhs.coeff.is_empty() || self.coeff.is_empty() {
+            return Poly::zero().expect("failed to create zero Poly");
+        }
         let mut coeff = vec![Fr::zero(); self.coeff.len() + rhs.borrow().coeff.len() - 1];
         let mut s; // TODO: Mlock and zero on drop.
         for (i, cs) in self.coeff.iter().enumerate() {
@@ -238,6 +241,18 @@ impl<B: Borrow<Poly>> ops::Mul<B> for Poly {
 impl<B: Borrow<Self>> ops::MulAssign<B> for Poly {
     fn mul_assign(&mut self, rhs: B) {
         *self = &*self * rhs;
+    }
+}
+
+impl ops::MulAssign<Fr> for Poly {
+    fn mul_assign(&mut self, rhs: Fr) {
+        if rhs.is_zero() {
+            *self = Poly::zero().expect("failed to create zero Poly");
+        } else {
+            for c in &mut self.coeff {
+                c.mul_assign(&rhs);
+            }
+        }
     }
 }
 
@@ -504,36 +519,35 @@ impl Poly {
     /// Returns an `Error::MlockFailed` if we hit the system's locked memory limit and failed to
     /// `mlock` the new `Poly` instance.
     fn compute_interpolation(samples: &[(Fr, Fr)]) -> Result<Self> {
+        let mut poly; // Interpolates on the first `i` samples.
+        let mut base; // Is zero on the first `i` samples.
         if samples.is_empty() {
             return Poly::zero();
-        } else if samples.len() == 1 {
-            return Poly::constant(samples[0].1);
+        } else {
+            poly = Poly::constant(samples[0].1)?;
+            let mut minus_s0 = samples[0].0;
+            minus_s0.negate();
+            base = Poly::new(vec![minus_s0, Fr::one()])?;
         }
-        // The degree is at least 1 now.
-        let degree = samples.len() - 1;
-        // Interpolate all but the last sample.
-        let prev = Self::compute_interpolation(&samples[..degree])?;
-        let (x, mut y) = samples[degree]; // The last sample.
-        y.sub_assign(&prev.evaluate(x));
-        Ok(Self::lagrange(x, &samples[..degree])? * y + prev)
-    }
 
-    /// Returns the Lagrange base polynomial that is `1` in `p` and `0` in every `samples[i].0`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we hit the system's locked memory limit.
-    fn lagrange(p: Fr, samples: &[(Fr, Fr)]) -> Result<Self> {
-        let mut result = Self::one()?;
-        for &(mut sx, _) in samples {
-            sx.negate();
-            result *= Poly::new(vec![sx, Fr::one()])?;
+        // We update `base` so that it is always zero on all previous samples, and `poly` so that
+        // it has the correct values on the previous samples.
+        for (ref x, ref y) in &samples[1..] {
+            // Scale `base` so that its value at `x` is the difference between `y` and `poly`'s
+            // current value at `x`: Adding it to `poly` will then make it correct for `x`.
+            let mut diff = *y;
+            diff.sub_assign(&poly.evaluate(x));
+            let mut base_val = base.evaluate(x);
+            diff.mul_assign(&base_val.inverse().expect("sample points must be distinct"));
+            base *= diff;
+            poly += &base;
+
+            // Finally, multiply `base` by X - x, so that it is zero at `x`, too, now.
+            let mut minus_x = *x;
+            minus_x.negate();
+            base *= Poly::new(vec![minus_x, Fr::one()])?;
         }
-        let denom = result
-            .evaluate(p)
-            .inverse()
-            .expect("sample points must be distinct");
-        Ok(result * denom)
+        Ok(poly)
     }
 
     // Removes the `mlock` for `len` elements that have been truncated from the `coeff` vector.
