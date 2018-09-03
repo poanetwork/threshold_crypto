@@ -130,7 +130,7 @@ impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
         let bytes = uncomp.as_ref();
-        write!(f, "PublicKey({:?})", HexBytes(bytes))
+        f.debug_tuple("PublicKey").field(&HexBytes(bytes)).finish()
     }
 }
 
@@ -171,7 +171,9 @@ impl fmt::Debug for PublicKeyShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
         let bytes = uncomp.as_ref();
-        write!(f, "PublicKeyShare({:?})", HexBytes(bytes))
+        f.debug_tuple("PublicKeyShare")
+            .field(&HexBytes(bytes))
+            .finish()
     }
 }
 
@@ -208,7 +210,7 @@ impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
         let bytes = uncomp.as_ref();
-        write!(f, "Signature({:?})", HexBytes(bytes))
+        f.debug_tuple("Signature").field(&HexBytes(bytes)).finish()
     }
 }
 
@@ -238,7 +240,9 @@ impl fmt::Debug for SignatureShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
         let bytes = uncomp.as_ref();
-        write!(f, "SignatureShare({:?})", HexBytes(bytes))
+        f.debug_tuple("SignatureShare")
+            .field(&HexBytes(bytes))
+            .finish()
     }
 }
 
@@ -313,7 +317,7 @@ impl Drop for SecretKey {
 /// A debug statement where the secret prime field element is redacted.
 impl fmt::Debug for SecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SecretKey(...)")
+        f.debug_tuple("SecretKey").field(&"...").finish()
     }
 }
 
@@ -445,9 +449,7 @@ pub struct SecretKeyShare(SecretKey);
 
 impl fmt::Debug for SecretKeyShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let uncomp = self.0.public_key().0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
-        write!(f, "SecretKeyShare({:?})", HexBytes(bytes))
+        f.debug_tuple("SecretKeyShare").field(&"...").finish()
     }
 }
 
