@@ -515,8 +515,7 @@ impl Poly {
         let prev = Self::compute_interpolation(&samples[..degree])?;
         let (x, mut y) = samples[degree]; // The last sample.
         y.sub_assign(&prev.evaluate(x));
-        let step = Self::lagrange(x, &samples[..degree])?;
-        Self::constant(y).map(|poly| poly * step + prev)
+        Ok(Self::lagrange(x, &samples[..degree])? * y + prev)
     }
 
     /// Returns the Lagrange base polynomial that is `1` in `p` and `0` in every `samples[i].0`.
@@ -527,14 +526,14 @@ impl Poly {
     fn lagrange(p: Fr, samples: &[(Fr, Fr)]) -> Result<Self> {
         let mut result = Self::one()?;
         for &(mut sx, _) in samples {
-            let mut denom = p;
-            denom.sub_assign(&sx);
-            denom = denom.inverse().expect("sample points must be distinct");
             sx.negate();
-            sx.mul_assign(&denom);
-            result *= Poly::new(vec![sx, denom])?;
+            result *= Poly::new(vec![sx, Fr::one()])?;
         }
-        Ok(result)
+        let denom = result
+            .evaluate(p)
+            .inverse()
+            .expect("sample points must be distinct");
+        Ok(result * denom)
     }
 
     // Removes the `mlock` for `len` elements that have been truncated from the `coeff` vector.
