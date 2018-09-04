@@ -45,12 +45,12 @@ impl ChatNetwork {
     // before it can be added to the `chat_log`.
     fn new(n_nodes: usize, threshold: usize) -> Self {
         let mut rng = rand::thread_rng();
-        let sk_set = SecretKeySet::random(threshold, &mut rng).unwrap();
+        let sk_set = SecretKeySet::random(threshold, &mut rng);
         let pk_set = sk_set.public_keys();
 
         let nodes = (0..n_nodes)
             .map(|id| {
-                let sk_share = sk_set.secret_key_share(id).unwrap();
+                let sk_share = sk_set.secret_key_share(id);
                 let pk_share = pk_set.public_key_share(id);
                 Node::new(id, sk_share, pk_share)
             }).collect();
