@@ -31,8 +31,8 @@ pub mod serde_impl;
 use std::env;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::mem::size_of_val;
-use std::ptr::{copy_nonoverlapping, write_volatile};
+use std::mem::{size_of, size_of_val};
+use std::ptr::copy_nonoverlapping;
 
 use byteorder::{BigEndian, ByteOrder};
 use errno::errno;
@@ -62,6 +62,14 @@ lazy_static! {
         Ok(s) => s.parse().unwrap_or(true),
         _ => true,
     };
+
+    // The size in bytes of a single `Fr` field element.
+    static ref FR_SIZE: usize = size_of::<Fr>();
+}
+
+// Overwrites a single field element with zeros.
+pub(crate) fn clear_fr(fr_ptr: *mut u8) {
+    unsafe { memzero(fr_ptr, *FR_SIZE) };
 }
 
 /// Marks a type as containing one or more secret prime field elements.
@@ -256,55 +264,50 @@ pub struct SecretKey(Box<Fr>);
 ///
 /// # Panics
 ///
-/// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
-/// `SecretKey`.`
+/// Panics if we have reached the system's locked memory limit when locking the secret field
+/// element in RAM.
 impl Default for SecretKey {
     fn default() -> Self {
         let mut fr = Fr::zero();
-        match SecretKey::from_mut_ptr(&mut fr as *mut Fr) {
-            Ok(sk) => sk,
-            Err(e) => panic!("Failed to create default `SecretKey`: {}", e),
-        }
+        SecretKey::try_from_mut(&mut fr)
+            .unwrap_or_else(|e| panic!("Failed to create default `SecretKey`: {}", e))
     }
 }
 
-/// Creates a random `SecretKey`.
+/// Creates a random `SecretKey` from a given RNG. If you do not need to specify your own RNG, you
+/// should use `SecretKey::random()` or `SecretKey::try_random()` as your constructor instead.
 ///
 /// # Panics
 ///
-/// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
-/// `SecretKey`.
+/// Panics if we have reached the system's locked memory limit when locking the secret field
+/// element in RAM.
 impl Rand for SecretKey {
     fn rand<R: Rng>(rng: &mut R) -> Self {
         let mut fr = Fr::rand(rng);
-        match SecretKey::from_mut_ptr(&mut fr as *mut Fr) {
-            Ok(sk) => sk,
-            Err(e) => panic!("Failed to create random `SecretKey`: {}", e),
-        }
+        SecretKey::try_from_mut(&mut fr)
+            .unwrap_or_else(|e| panic!("Failed to create random `SecretKey`: {}", e))
     }
 }
 
-/// Creates a new `SecretKey` by cloning another key's prime field element.
+/// Creates a new `SecretKey` by cloning another `SecretKey`'s prime field element.
 ///
 /// # Panics
 ///
-/// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
-/// `SecretKey`.
+/// Panics if we have reached the system's locked memory limit when locking the secret field
+/// element into RAM.
 impl Clone for SecretKey {
     fn clone(&self) -> Self {
         let mut fr = *self.0;
-        match SecretKey::from_mut_ptr(&mut fr as *mut Fr) {
-            Ok(sk) => sk,
-            Err(e) => panic!("Failed to clone a new `SecretKey`: {}", e),
-        }
+        SecretKey::try_from_mut(&mut fr)
+            .unwrap_or_else(|e| panic!("Failed to clone `SecretKey`: {}", e))
     }
 }
 
-// A volatile overwrite of the prime field element's memory.
+// Zeroes out and unlocks the memory allocated from the `SecretKey`'s field element.
 //
 // # Panics
 //
-// Panics if we were unable to `munlock` the prime field element memory after it has been cleared.
+// Panics if we fail to unlock the memory containing the field element.
 impl Drop for SecretKey {
     fn drop(&mut self) {
         self.zero_secret_memory();
@@ -362,50 +365,98 @@ impl ContainsSecret for SecretKey {
 
     fn zero_secret_memory(&self) {
         let ptr = &*self.0 as *const Fr as *mut u8;
-        let n_bytes = size_of_val(&*self.0);
-        unsafe {
-            memzero(ptr, n_bytes);
-        }
+        clear_fr(ptr);
     }
 }
 
 impl SecretKey {
-    /// Creates a new `SecretKey` given a mutable raw pointer to a prime
-    /// field element. This constructor takes a pointer to avoid any
-    /// unnecessary stack copying/moving of secrets. The field element will
-    /// be copied bytewise onto the heap, the resulting `Box` is then
-    /// stored in the `SecretKey`.
+    /// Creates a new `SecretKey` from a mutable reference to a field element. This constructor
+    /// takes a reference to avoid any unnecessary stack copying/moving of secrets (i.e. the field
+    /// element). The field element is copied bytewise onto the heap, the resulting `Box` is
+    /// stored in the returned `SecretKey`.
     ///
-    /// *WARNING* this constructor will overwrite the pointed to `Fr` element
-    /// with zeros after it has been copied onto the heap.
+    /// This constructor is identical to `SecretKey::try_from_mut()` in every way except that this
+    /// constructor will panic if locking memory into RAM fails, whereas
+    /// `SecretKey::try_from_mut()` returns an `Err`.
+    ///
+    /// *WARNING* this constructor will overwrite the referenced `Fr` element with zeros after it
+    /// has been copied onto the heap.
+    ///
+    /// # Panics
+    ///
+    /// Panics if we reach the system's locked memory limit when locking the secret field element
+    /// into RAM.
+    pub fn from_mut(fr: &mut Fr) -> Self {
+        SecretKey::try_from_mut(fr)
+            .unwrap_or_else(|e| panic!("Falied to create `SecretKey`: {}", e))
+    }
+
+    /// Creates a new `SecretKey` from a mutable reference to a field element. This constructor
+    /// takes a reference to avoid any unnecessary stack copying/moving of secrets (i.e. the field
+    /// element). The field element is copied bytewise onto the heap, the resulting `Box` is
+    /// stored in the returned `SecretKey`.
+    ///
+    /// This constructor is identical to `SecretKey::from_mut()` in every way except that this
+    /// constructor will return an `Err` if locking memory into RAM fails, whereas
+    /// `SecretKey::from_mut()` will panic.
+    ///
+    /// *WARNING* this constructor will overwrite the referenced `Fr` element with zeros after it
+    /// has been copied onto the heap.
     ///
     /// # Errors
     ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's
-    /// locked memory limit.
-    #[cfg_attr(feature = "cargo-clippy", allow(not_unsafe_ptr_arg_deref))]
-    pub fn from_mut_ptr(fr_ptr: *mut Fr) -> Result<Self> {
+    /// Returns an `Error::MlockFailed` if we reached the system's locked memory limit when locking
+    /// the secret field element into RAM.
+    pub fn try_from_mut(fr: &mut Fr) -> Result<Self> {
+        let fr_ptr = fr as *mut Fr;
         let mut boxed_fr = Box::new(Fr::zero());
         unsafe {
             copy_nonoverlapping(fr_ptr, &mut *boxed_fr as *mut Fr, 1);
-            write_volatile(fr_ptr, Fr::zero());
         }
+        clear_fr(fr_ptr as *mut u8);
         let sk = SecretKey(boxed_fr);
         sk.mlock_secret_memory()?;
         Ok(sk)
     }
 
-    /// Creates a new random instance of `SecretKey`. This is used
-    /// as a  wrapper around: `let sk: SecretKey = rand::random();`.
+    /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
+    /// number generator, you should use the constructor: `SecretKey::rand()`. If you do not need
+    /// to specify your own RNG, you should use the `SecretKey::random()` and
+    /// `SecretKey::try_random()` constructors, which use
+    /// [`rand::thead_rng()`](https://docs.rs/rand/0.4.3/rand/fn.thread_rng.html) internally as
+    /// their RNG.
+    ///
+    /// This constructor panics if it is unable to lock `SecretKey` memory into RAM, otherwise it
+    /// is identical to the constructor: `SecretKey::try_random()` (which instead of panicing
+    /// returns an `Err`).
     ///
     /// # Panics
     ///
-    /// Panics if we have hit the system's locked memory limit when
-    /// `mlock`ing the new instance of `SecretKey`.
+    /// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
+    /// `SecretKey`.
     pub fn random() -> Self {
-        use rand::thread_rng;
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
         SecretKey::rand(&mut rng)
+    }
+
+    /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
+    /// number generator, you should use the constructor: `SecretKey::rand()`. If you do not need
+    /// to specify your own RNG, you should use the `SecretKey::random()` and
+    /// `SecretKey::try_random()` constructors, which use
+    /// [`rand::thead_rng()`](https://docs.rs/rand/0.4.3/rand/fn.thread_rng.html) internally as
+    /// their RNG.
+    ///
+    /// This constructor returns an `Err` if it is unable to lock `SecretKey` memory into RAM,
+    /// otherwise it is identical to the constructor: `SecretKey::random()` (which will panic
+    /// instead of returning an `Err`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    pub fn try_random() -> Result<Self> {
+        let mut rng = rand::thread_rng();
+        let mut fr = Fr::rand(&mut rng);
+        SecretKey::try_from_mut(&mut fr)
     }
 
     /// Returns the matching public key.
@@ -454,21 +505,48 @@ impl fmt::Debug for SecretKeyShare {
 }
 
 impl SecretKeyShare {
-    /// Creates a secret key share from an existing value. This constructor
-    /// takes a pointer to avoid any unnecessary stack copying/moving of
-    /// secrets. The field element will be copied bytewise onto the heap,
-    /// the resulting `Box` is then stored in the `SecretKey` which is then
-    /// wrapped in a `SecretKeyShare`.
+    /// Creates a new `SecretKeyShare` from a mutable reference to a field element. This
+    /// constructor takes a reference to avoid any unnecessary stack copying/moving of secrets
+    /// field elements. The field element will be copied bytewise onto the heap, the resulting
+    /// `Box` is stored in the `SecretKey` which is then wrapped in a `SecretKeyShare`.
     ///
-    /// *WARNING* this constructor will overwrite the pointed to `Fr` element
-    /// with zeros once it has been copied into a new `SecretKeyShare`.
+    /// This constructor is identical to `SecretKeyShare::try_from_mut()` in every way except that
+    /// this constructor will panic if locking memory into RAM fails, whereas
+    /// `SecretKeyShare::try_from_mut()` will return an `Err`.
+    ///
+    /// *WARNING* this constructor will overwrite the pointed to `Fr` element with zeros once it
+    /// has been copied into a new `SecretKeyShare`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if we reach the systems locked memory limit.
+    pub fn from_mut(fr: &mut Fr) -> Self {
+        match SecretKey::try_from_mut(fr) {
+            Ok(sk) => SecretKeyShare(sk),
+            Err(e) => panic!(
+                "Failed to create `SecretKeyShare` from field element: {}",
+                e
+            ),
+        }
+    }
+
+    /// Creates a new `SecretKeyShare` from a mutable reference to a field element. This
+    /// constructor takes a reference to avoid any unnecessary stack copying/moving of secrets
+    /// field elements. The field element will be copied bytewise onto the heap, the resulting
+    /// `Box` is stored in the `SecretKey` which is then wrapped in a `SecretKeyShare`.
+    ///
+    /// This constructor is identical to `SecretKeyShare::from_mut()` in every way except that this
+    /// constructor will return an `Err` if locking memory into RAM fails, whereas
+    /// `SecretKeyShare::from_mut()` will panic.
+    ///
+    /// *WARNING* this constructor will overwrite the pointed to `Fr` element with zeros once it
+    /// has been copied into a new `SecretKeyShare`.
     ///
     /// # Errors
     ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's
-    /// locked memory limit.
-    pub fn from_mut_ptr(fr_ptr: *mut Fr) -> Result<Self> {
-        SecretKey::from_mut_ptr(fr_ptr).map(SecretKeyShare)
+    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    pub fn try_from_mut(fr: &mut Fr) -> Result<Self> {
+        SecretKey::try_from_mut(fr).map(SecretKeyShare)
     }
 
     /// Returns the matching public key share.
@@ -621,10 +699,26 @@ impl From<Poly> for SecretKeySet {
 
 impl SecretKeySet {
     /// Creates a set of secret key shares, where any `threshold + 1` of them can collaboratively
-    /// sign and decrypt.
-    pub fn random<R: Rng>(threshold: usize, rng: &mut R) -> Result<Self> {
-        let poly = Poly::random(threshold, rng)?;
-        Ok(SecretKeySet { poly })
+    /// sign and decrypt. This constuctor is identical to the `SecretKey::try_random()` in every
+    /// way except that this constructor panics if locking secret values into RAM fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if we reach the system's locked memory limit.
+    pub fn random<R: Rng>(threshold: usize, rng: &mut R) -> Self {
+        SecretKeySet::try_random(threshold, rng)
+            .unwrap_or_else(|e| panic!("Failed to create random `SecretKeySet`: {}", e))
+    }
+
+    /// Creates a set of secret key shares, where any `threshold + 1` of them can collaboratively
+    /// sign and decrypt. This constuctor is identical to the `SecretKey::random()` in every
+    /// way except that this constructor return an `Err` if locking secret values into RAM fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    pub fn try_random<R: Rng>(threshold: usize, rng: &mut R) -> Result<Self> {
+        Poly::try_random(threshold, rng).map(SecretKeySet::from)
     }
 
     /// Returns the threshold `t`: any set of `t + 1` signature shares can be combined into a full
@@ -633,10 +727,30 @@ impl SecretKeySet {
         self.poly.degree()
     }
 
-    /// Returns the `i`-th secret key share.
-    pub fn secret_key_share<T: IntoFr>(&self, i: T) -> Result<SecretKeyShare> {
+    /// Returns the `i`-th secret key share. This method is identical to the
+    /// `.try_secret_key_share()` in every way except that this method panics if
+    /// locking secret values into memory fails, whereas `.try_secret_key_share()`
+    /// returns an `Err`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if we reach the system's locked memory limit.
+    pub fn secret_key_share<T: IntoFr>(&self, i: T) -> SecretKeyShare {
+        self.try_secret_key_share(i)
+            .unwrap_or_else(|e| panic!("Failed to create `SecretKeyShare`: {}", e))
+    }
+
+    /// Returns the `i`-th secret key share. This method is identical to the method
+    /// `.secret_key_share()` in every way except that this method returns an `Err` if
+    /// locking secret values into memory fails, whereas `.secret_key_share()` will
+    /// panic.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    pub fn try_secret_key_share<T: IntoFr>(&self, i: T) -> Result<SecretKeyShare> {
         let mut fr = self.poly.evaluate(into_fr_plus_1(i));
-        SecretKeyShare::from_mut_ptr(&mut fr as *mut Fr)
+        SecretKeyShare::try_from_mut(&mut fr)
     }
 
     /// Returns the corresponding public key set. That information can be shared publicly.
@@ -646,11 +760,16 @@ impl SecretKeySet {
         }
     }
 
-    /// Returns the secret master key.
+    /// Returns the secret master key. Panics if mlocking fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
+    /// `SecretKey`.
     #[cfg(test)]
-    fn secret_key(&self) -> Result<SecretKey> {
+    fn secret_key(&self) -> SecretKey {
         let mut fr = self.poly.evaluate(0);
-        SecretKey::from_mut_ptr(&mut fr as *mut Fr)
+        SecretKey::from_mut(&mut fr)
     }
 }
 
@@ -757,7 +876,7 @@ mod tests {
     #[test]
     fn test_threshold_sig() {
         let mut rng = rand::thread_rng();
-        let sk_set = SecretKeySet::random(3, &mut rng).expect("Failed to create `SecretKeySet`");
+        let sk_set = SecretKeySet::random(3, &mut rng);
         let pk_set = sk_set.public_keys();
         let pk_master = pk_set.public_key();
 
@@ -767,21 +886,10 @@ mod tests {
         assert_ne!(pk_master, pk_set.public_key_share(2).0);
 
         // Make sure we don't hand out the main secret key to anyone.
-        let sk_master = sk_set
-            .secret_key()
-            .expect("Failed to create master `SecretKey`");
-        let sk_share_0 = sk_set
-            .secret_key_share(0)
-            .expect("Failed to create first `SecretKeyShare`")
-            .0;
-        let sk_share_1 = sk_set
-            .secret_key_share(1)
-            .expect("Failed to create second `SecretKeyShare`")
-            .0;
-        let sk_share_2 = sk_set
-            .secret_key_share(2)
-            .expect("Failed to create third `SecretKeyShare`")
-            .0;
+        let sk_master = sk_set.secret_key();
+        let sk_share_0 = sk_set.secret_key_share(0).0;
+        let sk_share_1 = sk_set.secret_key_share(1).0;
+        let sk_share_2 = sk_set.secret_key_share(2).0;
         assert_ne!(sk_master, sk_share_0);
         assert_ne!(sk_master, sk_share_1);
         assert_ne!(sk_master, sk_share_2);
@@ -792,10 +900,7 @@ mod tests {
         let sigs: BTreeMap<_, _> = [5, 8, 7, 10]
             .iter()
             .map(|&i| {
-                let sig = sk_set
-                    .secret_key_share(i)
-                    .unwrap_or_else(|_| panic!("Failed to create `SecretKeyShare` #{}", i))
-                    .sign(msg);
+                let sig = sk_set.secret_key_share(i).sign(msg);
                 (i, sig)
             }).collect();
 
@@ -812,10 +917,7 @@ mod tests {
         let sigs2: BTreeMap<_, _> = [42, 43, 44, 45]
             .iter()
             .map(|&i| {
-                let sig = sk_set
-                    .secret_key_share(i)
-                    .unwrap_or_else(|_| panic!("Failed to create `SecretKeyShare` #{}", i))
-                    .sign(msg);
+                let sig = sk_set.secret_key_share(i).sign(msg);
                 (i, sig)
             }).collect();
         let sig2 = pk_set.combine_signatures(&sigs2).expect("signatures match");
@@ -832,11 +934,11 @@ mod tests {
         assert!(ciphertext.verify());
 
         // Bob can decrypt the message.
-        let decrypted = sk_bob.decrypt(&ciphertext).expect("valid ciphertext");
+        let decrypted = sk_bob.decrypt(&ciphertext).expect("invalid ciphertext");
         assert_eq!(msg[..], decrypted[..]);
 
         // Eve can't.
-        let decrypted_eve = sk_eve.decrypt(&ciphertext).expect("valid ciphertext");
+        let decrypted_eve = sk_eve.decrypt(&ciphertext).expect("invalid ciphertext");
         assert_ne!(msg[..], decrypted_eve[..]);
 
         // Eve tries to trick Bob into decrypting `msg` xor `v`, but it doesn't validate.
@@ -849,7 +951,7 @@ mod tests {
     #[test]
     fn test_threshold_enc() {
         let mut rng = rand::thread_rng();
-        let sk_set = SecretKeySet::random(3, &mut rng).expect("Failed to create to `SecretKeySet`");
+        let sk_set = SecretKeySet::random(3, &mut rng);
         let pk_set = sk_set.public_keys();
         let msg = b"Totally real news";
         let ciphertext = pk_set.public_key().encrypt(&msg[..]);
@@ -860,9 +962,8 @@ mod tests {
             .map(|&i| {
                 let dec_share = sk_set
                     .secret_key_share(i)
-                    .unwrap_or_else(|_| panic!("Failed to create `SecretKeyShare` #{}", i))
                     .decrypt_share(&ciphertext)
-                    .expect("ciphertext is valid");
+                    .expect("ciphertext is invalid");
                 (i, dec_share)
             }).collect();
 

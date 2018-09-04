@@ -19,8 +19,8 @@ mod poly_benches {
             "Polynomial multiplication",
             move |b, &&deg| {
                 let rand_factors = || {
-                    let lhs = Poly::random(deg, &mut rng).unwrap();
-                    let rhs = Poly::random(deg, &mut rng).unwrap();
+                    let lhs = Poly::random(deg, &mut rng);
+                    let rhs = Poly::random(deg, &mut rng);
                     (lhs, rhs)
                 };
                 b.iter_with_setup(rand_factors, |(lhs, rhs)| &lhs * &rhs)
@@ -36,7 +36,7 @@ mod poly_benches {
             "Polynomial interpolation",
             move |b, &&deg| {
                 let rand_samples = || (0..=deg).map(|i| (i, rng.gen::<Fr>())).collect::<Vec<_>>();
-                b.iter_with_setup(rand_samples, |samples| Poly::interpolate(samples).unwrap())
+                b.iter_with_setup(rand_samples, Poly::interpolate)
             },
             &[5, 10, 20, 40],
         );

@@ -27,12 +27,12 @@ impl SecretSociety {
     // decrypt a message must exceed this `threshold`.
     fn new(n_actors: usize, threshold: usize) -> Self {
         let mut rng = rand::thread_rng();
-        let sk_set = SecretKeySet::random(threshold, &mut rng).unwrap();
+        let sk_set = SecretKeySet::random(threshold, &mut rng);
         let pk_set = sk_set.public_keys();
 
         let actors = (0..n_actors)
             .map(|id| {
-                let sk_share = sk_set.secret_key_share(id).unwrap();
+                let sk_share = sk_set.secret_key_share(id);
                 let pk_share = pk_set.public_key_share(id);
                 Actor::new(id, sk_share, pk_share)
             }).collect();
