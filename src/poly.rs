@@ -22,13 +22,13 @@ use std::hash::{Hash, Hasher};
 use std::mem::size_of_val;
 use std::{cmp, iter, ops};
 
-use errno::errno;
-use memsec::{memzero, mlock, munlock};
 use pairing::bls12_381::{Fr, G1Affine, G1};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 
-use super::{clear_fr, ContainsSecret, Error, IntoFr, Result, FR_SIZE, SHOULD_MLOCK_SECRETS};
+use error::Result;
+use into_fr::IntoFr;
+use secret::{clear_fr, ContainsSecret, MemRange, Safe};
 
 /// A univariate polynomial in the prime field.
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
@@ -42,8 +42,8 @@ pub struct Poly {
 ///
 /// # Panics
 ///
-/// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
-/// `Poly`.
+/// Panics if we reach the system's locked memory limit when locking the polynomial's coefficients
+/// into RAM.
 impl Clone for Poly {
     fn clone(&self) -> Self {
         Poly::try_from(self.coeff.clone())
@@ -60,8 +60,7 @@ impl Debug for Poly {
 
 /// # Panics
 ///
-/// Panics if we hit the system's locked memory limit or if we fail to unlock memory that has been
-/// truncated from the `coeff` vector.
+/// Panics if we reach the system's locked memory limit.
 #[cfg_attr(feature = "cargo-clippy", allow(suspicious_op_assign_impl))]
 impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
     fn add_assign(&mut self, rhs: B) {
@@ -69,8 +68,7 @@ impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
         let rhs_len = rhs.borrow().coeff.len();
         if rhs_len > len {
             self.coeff.resize(rhs_len, Fr::zero());
-            let n_coeffs_added = rhs_len - len;
-            if let Err(e) = self.extend_mlock(n_coeffs_added) {
+            if let Err(e) = self.mlock_secret() {
                 panic!(
                     "Failed to extend `Poly` memory lock during add-assign: {}",
                     e
@@ -80,9 +78,7 @@ impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
             self_c.add_assign(rhs_c);
         }
-        if let Err(e) = self.remove_zeros() {
-            panic!("Failed to unlock `Poly` memory during add-assign: {}", e);
-        }
+        self.remove_zeros();
     }
 }
 
@@ -105,24 +101,19 @@ impl<B: Borrow<Poly>> ops::Add<B> for Poly {
 
 /// # Panics
 ///
-/// Panics if we hit the system's locked memory limit or if we fail to unlock memory that has been
-/// truncated from the `coeff` vector.
+/// Panics if we reach the system's locked memory limit.
 impl<'a> ops::Add<Fr> for Poly {
     type Output = Poly;
 
     fn add(mut self, rhs: Fr) -> Self::Output {
-        if self.coeff.is_empty() {
-            if !rhs.is_zero() {
-                self.coeff.push(rhs);
-                if let Err(e) = self.extend_mlock(1) {
-                    panic!("Failed to extend `Poly` memory lock during add: {}", e);
-                }
+        if self.is_zero() && !rhs.is_zero() {
+            self.coeff.push(rhs);
+            if let Err(e) = self.mlock_secret() {
+                panic!("Failed to extend `Poly` memory lock during add: {}", e);
             }
         } else {
             self.coeff[0].add_assign(&rhs);
-            if let Err(e) = self.remove_zeros() {
-                panic!("Failed to unlock `Poly` memory during add: {}", e);
-            }
+            self.remove_zeros();
         }
         self
     }
@@ -138,16 +129,14 @@ impl<'a> ops::Add<u64> for Poly {
 
 /// # Panics
 ///
-/// Panics if we hit the system's locked memory limit or if we fail to unlock memory that has been
-/// truncated from the `coeff` vector.
+/// Panics if we reach the system's locked memory limit.
 impl<B: Borrow<Poly>> ops::SubAssign<B> for Poly {
     fn sub_assign(&mut self, rhs: B) {
         let len = self.coeff.len();
         let rhs_len = rhs.borrow().coeff.len();
         if rhs_len > len {
             self.coeff.resize(rhs_len, Fr::zero());
-            let n_coeffs_added = rhs_len - len;
-            if let Err(e) = self.extend_mlock(n_coeffs_added) {
+            if let Err(e) = self.mlock_secret() {
                 panic!(
                     "Failed to extend `Poly` memory lock during sub-assign: {}",
                     e
@@ -157,9 +146,7 @@ impl<B: Borrow<Poly>> ops::SubAssign<B> for Poly {
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
             self_c.sub_assign(rhs_c);
         }
-        if let Err(e) = self.remove_zeros() {
-            panic!("Failed to unlock `Poly` memory during sub-assign: {}", e);
-        }
+        self.remove_zeros();
     }
 }
 
@@ -201,8 +188,7 @@ impl<'a> ops::Sub<u64> for Poly {
 
 /// # Panics
 ///
-/// Panics if we hit the system's locked memory limit or if we fail to unlock memory that has been
-/// truncated from the `coeff` vector.
+/// Panics if we reach the system's locked memory limit.
 // Clippy thinks using any `+` and `-` in a `Mul` implementation is suspicious.
 #[cfg_attr(feature = "cargo-clippy", allow(suspicious_arithmetic_impl))]
 impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
@@ -210,19 +196,20 @@ impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
 
     fn mul(self, rhs: B) -> Self::Output {
         let rhs = rhs.borrow();
-        if rhs.coeff.is_empty() || self.coeff.is_empty() {
+        if rhs.is_zero() || self.is_zero() {
             return Poly::zero();
         }
-        let mut coeff = vec![Fr::zero(); self.coeff.len() + rhs.borrow().coeff.len() - 1];
-        let mut s; // TODO: Mlock and zero on drop.
-        for (i, cs) in self.coeff.iter().enumerate() {
-            for (j, cr) in rhs.coeff.iter().enumerate() {
-                s = *cs;
-                s.mul_assign(cr);
-                coeff[i + j].add_assign(&s);
+        let n_coeffs = self.coeff.len() + rhs.coeff.len() - 1;
+        let mut coeffs = vec![Fr::zero(); n_coeffs];
+        let mut tmp = Safe::new(Box::new(Fr::zero()));
+        for (i, ca) in self.coeff.iter().enumerate() {
+            for (j, cb) in rhs.coeff.iter().enumerate() {
+                *tmp = *ca;
+                tmp.mul_assign(cb);
+                coeffs[i + j].add_assign(&*tmp);
             }
         }
-        Poly::try_from(coeff)
+        Poly::try_from(coeffs)
             .unwrap_or_else(|e| panic!("Failed to create a new `Poly` during muliplication: {}", e))
     }
 }
@@ -244,7 +231,8 @@ impl<B: Borrow<Self>> ops::MulAssign<B> for Poly {
 impl ops::MulAssign<Fr> for Poly {
     fn mul_assign(&mut self, rhs: Fr) {
         if rhs.is_zero() {
-            *self = Poly::zero();
+            self.zero_secret();
+            self.coeff.clear();
         } else {
             for c in &mut self.coeff {
                 c.mul_assign(&rhs);
@@ -262,10 +250,7 @@ impl<'a> ops::Mul<&'a Fr> for Poly {
 
     fn mul(mut self, rhs: &Fr) -> Self::Output {
         if rhs.is_zero() {
-            self.zero_secret_memory();
-            if let Err(e) = self.munlock_secret_memory() {
-                panic!("Failed to unlock `Poly` during multiplication: {}", e);
-            }
+            self.zero_secret();
             self.coeff.clear();
         } else {
             self.coeff.iter_mut().for_each(|c| c.mul_assign(rhs));
@@ -312,8 +297,8 @@ impl ops::Mul<u64> for Poly {
 /// Panics if we fail to munlock the `coeff` vector.
 impl Drop for Poly {
     fn drop(&mut self) {
-        self.zero_secret_memory();
-        if let Err(e) = self.munlock_secret_memory() {
+        self.zero_secret();
+        if let Err(e) = self.munlock_secret() {
             panic!("Failed to munlock `Poly` during drop: {}", e);
         }
     }
@@ -333,56 +318,10 @@ impl From<Vec<Fr>> for Poly {
 }
 
 impl ContainsSecret for Poly {
-    fn mlock_secret_memory(&self) -> Result<()> {
-        if !*SHOULD_MLOCK_SECRETS {
-            return Ok(());
-        }
+    fn secret_memory(&self) -> MemRange {
         let ptr = self.coeff.as_ptr() as *mut u8;
         let n_bytes = size_of_val(self.coeff.as_slice());
-        if n_bytes == 0 {
-            return Ok(());
-        }
-        let mlock_succeeded = unsafe { mlock(ptr, n_bytes) };
-        if mlock_succeeded {
-            Ok(())
-        } else {
-            let e = Error::MlockFailed {
-                errno: errno(),
-                addr: format!("{:?}", ptr),
-                n_bytes,
-            };
-            Err(e)
-        }
-    }
-
-    fn munlock_secret_memory(&self) -> Result<()> {
-        if !*SHOULD_MLOCK_SECRETS {
-            return Ok(());
-        }
-        let ptr = self.coeff.as_ptr() as *mut u8;
-        let n_bytes = size_of_val(self.coeff.as_slice());
-        if n_bytes == 0 {
-            return Ok(());
-        }
-        let munlock_succeeded = unsafe { munlock(ptr, n_bytes) };
-        if munlock_succeeded {
-            Ok(())
-        } else {
-            let e = Error::MunlockFailed {
-                errno: errno(),
-                addr: format!("{:?}", ptr),
-                n_bytes,
-            };
-            Err(e)
-        }
-    }
-
-    fn zero_secret_memory(&self) {
-        let ptr = self.coeff.as_ptr() as *mut u8;
-        let n_bytes = size_of_val(self.coeff.as_slice());
-        unsafe {
-            memzero(ptr, n_bytes);
-        }
+        MemRange { ptr, n_bytes }
     }
 }
 
@@ -396,7 +335,7 @@ impl Poly {
     /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
     pub fn try_from(coeff: Vec<Fr>) -> Result<Self> {
         let poly = Poly { coeff };
-        poly.mlock_secret_memory()?;
+        poly.mlock_secret()?;
         Ok(poly)
     }
 
@@ -431,6 +370,11 @@ impl Poly {
     /// coefficient is added to the `coeff` vector.
     pub fn zero() -> Self {
         Poly { coeff: vec![] }
+    }
+
+    /// Returns `true` if the polynomial is the constant value `0`.
+    pub fn is_zero(&self) -> bool {
+        self.coeff.iter().all(|coeff| coeff.is_zero())
     }
 
     /// Returns the polynomial with constant value `1`. This constructor is identical to
@@ -596,16 +540,10 @@ impl Poly {
     }
 
     /// Removes all trailing zero coefficients.
-    ///
-    /// # Errors
-    ///
-    /// An `Error::MunlockFailed` is returned if we failed to `munlock` the truncated portion of
-    /// the `coeff` vector.
-    fn remove_zeros(&mut self) -> Result<()> {
+    fn remove_zeros(&mut self) {
         let zeros = self.coeff.iter().rev().take_while(|c| c.is_zero()).count();
         let len = self.coeff.len() - zeros;
         self.coeff.truncate(len);
-        self.truncate_mlock(zeros)
     }
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
@@ -643,57 +581,6 @@ impl Poly {
             base *= Poly::try_from(vec![minus_x, Fr::one()])?;
         }
         Ok(poly)
-    }
-
-    // Removes the `mlock` for `len` elements that have been truncated from the `coeff` vector.
-    fn truncate_mlock(&self, len: usize) -> Result<()> {
-        if !*SHOULD_MLOCK_SECRETS {
-            return Ok(());
-        }
-        let n_bytes_truncated = *FR_SIZE * len;
-        if n_bytes_truncated == 0 {
-            return Ok(());
-        }
-        unsafe {
-            let ptr = self.coeff.as_ptr().offset(self.coeff.len() as isize) as *mut u8;
-            let munlock_succeeded = munlock(ptr, n_bytes_truncated);
-            if munlock_succeeded {
-                Ok(())
-            } else {
-                let e = Error::MunlockFailed {
-                    errno: errno(),
-                    addr: format!("{:?}", ptr),
-                    n_bytes: n_bytes_truncated,
-                };
-                Err(e)
-            }
-        }
-    }
-
-    // Extends the `mlock` on the `coeff` vector when `len` new elements are added.
-    fn extend_mlock(&self, len: usize) -> Result<()> {
-        if !*SHOULD_MLOCK_SECRETS {
-            return Ok(());
-        }
-        let n_bytes_extended = *FR_SIZE * len;
-        if n_bytes_extended == 0 {
-            return Ok(());
-        }
-        let offset = (self.coeff.len() - len) as isize;
-        unsafe {
-            let ptr = self.coeff.as_ptr().offset(offset) as *mut u8;
-            let mlock_succeeded = mlock(ptr, n_bytes_extended);
-            if mlock_succeeded {
-                Ok(())
-            } else {
-                let e = Error::MunlockFailed {
-                    errno: errno(),
-                    addr: format!("{:?}", ptr),
-                    n_bytes: n_bytes_extended,
-                };
-                Err(e)
-            }
-        }
     }
 
     /// Generates a non-redacted debug string. This method differs from
@@ -799,7 +686,7 @@ impl Clone for BivarPoly {
             degree: self.degree,
             coeff: self.coeff.clone(),
         };
-        if let Err(e) = poly.mlock_secret_memory() {
+        if let Err(e) = poly.mlock_secret() {
             panic!("Failed to clone `BivarPoly`: {}", e);
         }
         poly
@@ -811,8 +698,8 @@ impl Clone for BivarPoly {
 /// Panics if we fail to munlock the `coeff` vector.
 impl Drop for BivarPoly {
     fn drop(&mut self) {
-        self.zero_secret_memory();
-        if let Err(e) = self.munlock_secret_memory() {
+        self.zero_secret();
+        if let Err(e) = self.munlock_secret() {
             panic!("Failed to munlock `BivarPoly` during drop: {}", e);
         }
     }
@@ -829,56 +716,10 @@ impl Debug for BivarPoly {
 }
 
 impl ContainsSecret for BivarPoly {
-    fn mlock_secret_memory(&self) -> Result<()> {
-        if !*SHOULD_MLOCK_SECRETS {
-            return Ok(());
-        }
-        let ptr = self.coeff.as_ptr() as *mut u8;
+    fn secret_memory(&self) -> MemRange {
+        let ptr = self.coeff.as_ptr() as *const Fr as *mut u8;
         let n_bytes = size_of_val(self.coeff.as_slice());
-        if n_bytes == 0 {
-            return Ok(());
-        }
-        let mlock_succeeded = unsafe { mlock(ptr, n_bytes) };
-        if mlock_succeeded {
-            Ok(())
-        } else {
-            let e = Error::MlockFailed {
-                errno: errno(),
-                addr: format!("{:?}", ptr),
-                n_bytes,
-            };
-            Err(e)
-        }
-    }
-
-    fn munlock_secret_memory(&self) -> Result<()> {
-        if !*SHOULD_MLOCK_SECRETS {
-            return Ok(());
-        }
-        let ptr = self.coeff.as_ptr() as *mut u8;
-        let n_bytes = size_of_val(self.coeff.as_slice());
-        if n_bytes == 0 {
-            return Ok(());
-        }
-        let munlock_succeeded = unsafe { munlock(ptr, n_bytes) };
-        if munlock_succeeded {
-            Ok(())
-        } else {
-            let e = Error::MunlockFailed {
-                errno: errno(),
-                addr: format!("{:?}", ptr),
-                n_bytes,
-            };
-            Err(e)
-        }
-    }
-
-    fn zero_secret_memory(&self) {
-        let ptr = self.coeff.as_ptr() as *mut u8;
-        let n_bytes = size_of_val(self.coeff.as_slice());
-        unsafe {
-            memzero(ptr, n_bytes);
-        }
+        MemRange { ptr, n_bytes }
     }
 }
 
@@ -907,7 +748,7 @@ impl BivarPoly {
             degree,
             coeff: (0..coeff_pos(degree + 1, 0)).map(|_| rng.gen()).collect(),
         };
-        poly.mlock_secret_memory()?;
+        poly.mlock_secret()?;
         Ok(poly)
     }
 

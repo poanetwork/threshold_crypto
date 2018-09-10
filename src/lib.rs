@@ -26,18 +26,15 @@ extern crate tiny_keccak;
 pub mod error;
 mod into_fr;
 pub mod poly;
+mod secret;
 pub mod serde_impl;
 
-use std::env;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::mem::{size_of, size_of_val};
 use std::ptr::copy_nonoverlapping;
 
 use byteorder::{BigEndian, ByteOrder};
-use errno::errno;
 use init_with::InitWith;
-use memsec::{memzero, mlock, munlock};
 use pairing::bls12_381::{Bls12, Fr, G1Affine, G2Affine, G1, G2};
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
@@ -46,56 +43,7 @@ use tiny_keccak::sha3_256;
 use error::{Error, Result};
 use into_fr::IntoFr;
 use poly::{Commitment, Poly};
-
-lazy_static! {
-    // Sets whether or not `mlock`ing is enabled. Memory locking is enabled by default; it can be
-    // disabled by setting the environment variable `MLOCK_SECRETS=false`. This is useful when you
-    // are running on a system where you do not have the ability to increase the systems locked
-    // memory limit (which can be found using the Unix command: `ulimit -l`). For example, we
-    // disable `mlock`ing of secrets when testing crates that depend on `threshold_crypto` when
-    // running in Travis CI because Travis has a locked memory limit of 64kb, which we may exceed
-    // while running `cargo test`. Disabling `mlock`ing for secret values allows secret keys to be
-    // swapped/core-dumped to disk, resulting in unmanaged copies of secrets to hang around in
-    // memory; this is significantly less secure than enabling memory locking (the default). Only
-    // set `MLOCK_SECRETS=false` in development/testing.
-    pub(crate) static ref SHOULD_MLOCK_SECRETS: bool = match env::var("MLOCK_SECRETS") {
-        Ok(s) => s.parse().unwrap_or(true),
-        _ => true,
-    };
-
-    // The size in bytes of a single `Fr` field element.
-    static ref FR_SIZE: usize = size_of::<Fr>();
-}
-
-// Overwrites a single field element with zeros.
-pub(crate) fn clear_fr(fr_ptr: *mut u8) {
-    unsafe { memzero(fr_ptr, *FR_SIZE) };
-}
-
-/// Marks a type as containing one or more secret prime field elements.
-pub(crate) trait ContainsSecret {
-    /// Calls the `mlock` system call on the region of memory allocated for the secret prime field
-    /// element or elements. This results in that region of memory not being being copied to disk,
-    /// either in a swap to disk or core dump. This method is called on every created instance of
-    /// a secret type.
-    ///
-    /// # Errors
-    ///
-    /// An `Error::MlockFailed` is returned if we failed to `mlock` the secret data.
-    fn mlock_secret_memory(&self) -> Result<()>;
-
-    /// Undoes the `mlock` on the secret region of memory via the `munlock` system call.
-    ///
-    /// # Errors
-    ///
-    /// An `Error::MunlockFailed` is returned if we failed to `munlock` the secret data; this
-    /// method is called on each secret type when it  goes out of scope.
-    fn munlock_secret_memory(&self) -> Result<()>;
-
-    /// Overwrites the secret prime field element or elements with zeros; this method is called on
-    /// each each secret type when it  goes out of scope.
-    fn zero_secret_memory(&self);
-}
+use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
 
 /// Wrapper for a byte array, whose `Debug` implementation outputs shortened hexadecimal strings.
 pub struct HexBytes<'a>(pub &'a [u8]);
@@ -303,15 +251,15 @@ impl Clone for SecretKey {
     }
 }
 
-// Zeroes out and unlocks the memory allocated from the `SecretKey`'s field element.
-//
-// # Panics
-//
-// Panics if we fail to unlock the memory containing the field element.
+/// Zeroes out and unlocks the memory allocated from the `SecretKey`'s field element.
+///
+/// # Panics
+///
+/// Panics if we fail to unlock the memory containing the field element.
 impl Drop for SecretKey {
     fn drop(&mut self) {
-        self.zero_secret_memory();
-        if let Err(e) = self.munlock_secret_memory() {
+        self.zero_secret();
+        if let Err(e) = self.munlock_secret() {
             panic!("Failed to drop `SecretKey`: {}", e);
         }
     }
@@ -325,47 +273,10 @@ impl fmt::Debug for SecretKey {
 }
 
 impl ContainsSecret for SecretKey {
-    fn mlock_secret_memory(&self) -> Result<()> {
-        if !*SHOULD_MLOCK_SECRETS {
-            return Ok(());
-        }
+    fn secret_memory(&self) -> MemRange {
         let ptr = &*self.0 as *const Fr as *mut u8;
-        let n_bytes = size_of_val(&*self.0);
-        let mlock_succeeded = unsafe { mlock(ptr, n_bytes) };
-        if mlock_succeeded {
-            Ok(())
-        } else {
-            let e = Error::MlockFailed {
-                errno: errno(),
-                addr: format!("{:?}", ptr),
-                n_bytes,
-            };
-            Err(e)
-        }
-    }
-
-    fn munlock_secret_memory(&self) -> Result<()> {
-        if !*SHOULD_MLOCK_SECRETS {
-            return Ok(());
-        }
-        let ptr = &*self.0 as *const Fr as *mut u8;
-        let n_bytes = size_of_val(&*self.0);
-        let munlock_succeeded = unsafe { munlock(ptr, n_bytes) };
-        if munlock_succeeded {
-            Ok(())
-        } else {
-            let e = Error::MunlockFailed {
-                errno: errno(),
-                addr: format!("{:?}", ptr),
-                n_bytes,
-            };
-            Err(e)
-        }
-    }
-
-    fn zero_secret_memory(&self) {
-        let ptr = &*self.0 as *const Fr as *mut u8;
-        clear_fr(ptr);
+        let n_bytes = *FR_SIZE;
+        MemRange { ptr, n_bytes }
     }
 }
 
@@ -415,7 +326,7 @@ impl SecretKey {
         }
         clear_fr(fr_ptr as *mut u8);
         let sk = SecretKey(boxed_fr);
-        sk.mlock_secret_memory()?;
+        sk.mlock_secret()?;
         Ok(sk)
     }
 
