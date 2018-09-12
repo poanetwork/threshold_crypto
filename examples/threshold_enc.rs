@@ -22,8 +22,8 @@ impl SecretSociety {
     //
     // # Arguments
     //
-    // `n_actors` - the number of operatives in the secret society.
-    // `threshold` - the number of operatives that must collaborate in in order to successfully
+    // `n_actors` - the number of actors (members) in the secret society.
+    // `threshold` - the number of actors that must collaborate to successfully
     // decrypt a message must exceed this `threshold`.
     fn new(n_actors: usize, threshold: usize) -> Self {
         let mut rng = rand::thread_rng();
@@ -101,7 +101,7 @@ impl DecryptionMeeting {
     fn accept_decryption_share(&mut self, actor: &mut Actor) {
         let ciphertext = actor.msg_inbox.take().unwrap();
 
-        // Check that the actor's ciphertext is the same that is being decrypted at the meeting.
+        // Check that the actor's ciphertext is the same ciphertext decrypted at the meeting.
         // The first actor to arrive at the decryption meeting sets the meeting's ciphertext.
         if let Some(ref meeting_ciphertext) = self.ciphertext {
             if ciphertext != *meeting_ciphertext {
@@ -132,7 +132,7 @@ fn main() {
     // Create a `SecretSociety` with 3 actors. Any message encrypted with the society's public-key
     // will require 2 or more actors working together to decrypt (i.e. the decryption threshold is
     // 1). Once the secret society has created its master keys, it "deals" a secret-key share and
-    // public-key share to each of its operatives. The secret society then publishes its public key
+    // public-key share to each of its actors. The secret society then publishes its public key
     // to a publicly accessible key-server.
     let mut society = SecretSociety::new(3, 1);
     let pk = society.publish_public_key();
@@ -143,8 +143,8 @@ fn main() {
     let clara = society.get_actor(2).id;
 
     // I, the society's benevolent hacker, want to send an important message to each of my
-    // comrades. I encrypt my message with the society's public-key, I then send the ciphertext to
-    // each of the society's operatives.
+    // comrades. I encrypt my message with the society's public-key. I then send the ciphertext to
+    // each of the society's actors.
     let msg = b"let's get pizza";
     let ciphertext = pk.encrypt(msg);
     send_msg(society.get_actor(alice), ciphertext.clone());

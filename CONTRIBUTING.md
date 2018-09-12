@@ -9,11 +9,11 @@ submitting code or comments.
 3. Write tests that cover your work.
 4. Run Rustfmt, Clippy, and all tests to ensure CI rules are satisfied.
    Correct versions and feature flags can be found in the
-   [`.travis.yml`](https://github.com/poanetwork/hbbft/blob/master/.travis.yml)
+   [`.travis.yml`](.travis.yml)
    file.
 5. Commit your changes (`git commit -am 'Add some feature'`).
 6. Push to your branch (`git push origin my-new-feature`).
-7. Create a new PR (Pull Request).
+7. Create a new Pull Request.
 
 ### General
 
@@ -34,11 +34,11 @@ submitting code or comments.
 
 ### Issues
 
-Creating and discussing [Issues](https://github.com/poanetwork/hbbft/issues)
+Creating and discussing [Issues](https://github.com/poanetwork/threshold_crypto/issues)
 provides significant value to the project. If you find a bug you can report it
 in an Issue.
 
-### Pull Requests
+### Pull Requests (PR)
 
 All pull requests should include:
 
