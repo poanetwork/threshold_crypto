@@ -19,6 +19,7 @@ init_with = "1.1.0"
 lazy_static = "1.1.0"
 log = "0.4.1"
 memsec = "0.5.4"
+page_size = "0.4.1"
 pairing = { version = "0.14.2", features = ["u128-support"] }
 rand = "0.4.2"
 rand_derive = "0.3.1"

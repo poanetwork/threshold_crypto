@@ -14,6 +14,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 extern crate memsec;
+extern crate page_size;
 extern crate pairing;
 extern crate rand;
 #[macro_use]
