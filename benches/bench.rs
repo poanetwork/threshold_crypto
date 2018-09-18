@@ -9,6 +9,7 @@ use pairing::bls12_381::Fr;
 use threshold_crypto::poly::Poly;
 
 const TEST_DEGREES: [usize; 4] = [5, 10, 20, 40];
+const TEST_THRESHOLDS: [usize; 4] = [5, 10, 20, 40];
 const RNG_SEED: [u32; 4] = [1, 2, 3, 4];
 
 mod poly_benches {
@@ -86,4 +87,45 @@ mod poly_benches {
     }
 }
 
-criterion_main!(poly_benches::poly_benches);
+mod public_key_set_benches {
+    use super::*;
+    use rand::{SeedableRng, XorShiftRng};
+    use std::collections::BTreeMap;
+    use threshold_crypto::SecretKeySet;
+
+    /// Benchmarks combining signatures
+    fn combine_signatures(c: &mut Criterion) {
+        let mut rng = XorShiftRng::from_seed(RNG_SEED);
+        let msg = "Test message";
+        c.bench_function_over_inputs(
+            "Combine Signatures",
+            move |b, &&threshold| {
+                let sk_set = SecretKeySet::random(threshold, &mut rng);
+                let pk_set = sk_set.public_keys();
+                let mut sig_parts: Vec<usize> = (0..threshold+1).collect();
+                let pieces: &mut [usize] = &mut sig_parts;
+                let sigs: BTreeMap<_, _> = pieces
+                    .iter()
+                    .map(|&i| {
+                        let sig = sk_set.secret_key_share(i).sign(msg);
+                        (i, sig)
+                    }).collect();
+                b.iter(|| {
+                    pk_set.combine_signatures(&sigs).expect("could not combine signatures");
+                })
+            },
+            &TEST_THRESHOLDS,
+        );
+    }
+
+    criterion_group!{
+        name = public_key_set_benches;
+        config = Criterion::default();
+        targets = combine_signatures,
+    }
+}
+
+criterion_main!(
+    //poly_benches::poly_benches,
+    public_key_set_benches::public_key_set_benches
+);
