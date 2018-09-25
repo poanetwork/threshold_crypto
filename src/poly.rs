@@ -24,7 +24,7 @@ use std::{cmp, iter, ops};
 
 use errno::errno;
 use memsec::{memzero, mlock, munlock};
-use pairing::bls12_381::{Fr, G1, G1Affine};
+use super::{Fr, G1, G1Affine};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 
@@ -927,7 +927,7 @@ mod tests {
 
     use super::{coeff_pos, BivarPoly, IntoFr, Poly};
 
-    use pairing::bls12_381::{Fr, G1Affine};
+    use super::{Fr, G1Affine};
     use pairing::{CurveAffine, Field};
     use rand;
 
