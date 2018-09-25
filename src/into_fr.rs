@@ -1,4 +1,4 @@
-use pairing::bls12_381::Fr;
+use super::Fr;
 use pairing::{Field, PrimeField};
 
 /// A conversion into an element of the field `Fr`.

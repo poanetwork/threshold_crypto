@@ -22,7 +22,9 @@ use std::hash::{Hash, Hasher};
 use std::mem::size_of_val;
 use std::{cmp, iter, ops};
 
-use pairing::bls12_381::{Fr, G1Affine, G1};
+use super::{Fr, G1Affine, G1};
+use errno::errno;
+use memsec::{memzero, mlock, munlock};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 
@@ -931,7 +933,7 @@ mod tests {
 
     use super::{coeff_pos, BivarPoly, IntoFr, Poly};
 
-    use pairing::bls12_381::{Fr, G1Affine};
+    use super::{Fr, G1Affine};
     use pairing::{CurveAffine, Field};
     use rand;
 

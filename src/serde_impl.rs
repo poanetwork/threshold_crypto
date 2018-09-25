@@ -196,8 +196,8 @@ pub mod field_vec {
 
 #[cfg(test)]
 mod tests {
+    use super::super::PEngine;
     use bincode;
-    use pairing::bls12_381::Bls12;
     use pairing::Engine;
     use rand::{self, Rng};
 
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn vecs() {
         let mut rng = rand::thread_rng();
-        let vecs: Vecs<Bls12> = Vecs {
+        let vecs: Vecs<PEngine> = Vecs {
             curve_points: rng.gen_iter().take(10).collect(),
             field_elements: rng.gen_iter().take(10).collect(),
         };
