@@ -35,7 +35,16 @@ use std::ptr::copy_nonoverlapping;
 
 use byteorder::{BigEndian, ByteOrder};
 use init_with::InitWith;
-use pairing::bls12_381::{Bls12, Fr, G1Affine, G2Affine, G1, G2};
+use memsec::{memzero, mlock, munlock};
+
+use pairing::bls12_381::Bls12 as PEngine;
+type Fq = pairing::bls12_381::Fq;
+type Fr = pairing::bls12_381::Fr;
+type G1 = pairing::bls12_381::G1;
+type G1Affine = pairing::bls12_381::G1Affine;
+type G2 = pairing::bls12_381::G2;
+type G2Affine = pairing::bls12_381::G2Affine;
+
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
 use tiny_keccak::sha3_256;
@@ -93,7 +102,7 @@ impl fmt::Debug for PublicKey {
 impl PublicKey {
     /// Returns `true` if the signature matches the element of `G2`.
     pub fn verify_g2<H: Into<G2Affine>>(&self, sig: &Signature, hash: H) -> bool {
-        Bls12::pairing(self.0, hash) == Bls12::pairing(G1Affine::one(), sig.0)
+        PEngine::pairing(self.0, hash) == PEngine::pairing(G1Affine::one(), sig.0)
     }
 
     /// Returns `true` if the signature matches the message.
@@ -156,7 +165,7 @@ impl PublicKeyShare {
     pub fn verify_decryption_share(&self, share: &DecryptionShare, ct: &Ciphertext) -> bool {
         let Ciphertext(ref u, ref v, ref w) = *ct;
         let hash = hash_g1_g2(*u, v);
-        Bls12::pairing(share.0, hash) == Bls12::pairing((self.0).0, *w)
+        PEngine::pairing(share.0, hash) == PEngine::pairing((self.0).0, *w)
     }
 
     /// Returns a byte string representation of the public key share.
@@ -529,7 +538,7 @@ impl Ciphertext {
     pub fn verify(&self) -> bool {
         let Ciphertext(ref u, ref v, ref w) = *self;
         let hash = hash_g1_g2(*u, v);
-        Bls12::pairing(G1Affine::one(), *w) == Bls12::pairing(*u, hash)
+        PEngine::pairing(G1Affine::one(), *w) == PEngine::pairing(*u, hash)
     }
 }
 
