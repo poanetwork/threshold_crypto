@@ -35,15 +35,16 @@ use std::ptr::copy_nonoverlapping;
 
 use byteorder::{BigEndian, ByteOrder};
 use init_with::InitWith;
-use memsec::{memzero, mlock, munlock};
 
-use pairing::bls12_381::Bls12 as PEngine;
-type Fq = pairing::bls12_381::Fq;
-type Fr = pairing::bls12_381::Fr;
-type G1 = pairing::bls12_381::G1;
-type G1Affine = pairing::bls12_381::G1Affine;
-type G2 = pairing::bls12_381::G2;
-type G2Affine = pairing::bls12_381::G2Affine;
+// #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};
+
+// TODO: Add mock cryptography for tests.
+// #[cfg(feature = "use-insecure-test-only-mock-crypto")]
+// pub use pairing::mock::{
+//     Mersenne8 as Fr, Mocktography as PEngine, Ms8Affine as G1Affine, Ms8Affine as G2Affine,
+//     Ms8Projective as G1, Ms8Projective as G2,
+// };
 
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
@@ -341,7 +342,7 @@ impl SecretKey {
         unsafe {
             copy_nonoverlapping(fr_ptr, &mut *boxed_fr as *mut Fr, 1);
         }
-        clear_fr(fr_ptr as *mut u8);
+        clear_fr(fr_ptr);
         let sk = SecretKey(boxed_fr);
         sk.mlock_secret()?;
         Ok(sk)

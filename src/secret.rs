@@ -7,7 +7,7 @@ use std::ops::{Deref, DerefMut};
 
 use errno::errno;
 use memsec::{memzero, mlock, munlock};
-use pairing::bls12_381::Fr;
+use Fr;
 
 use error::{Error, Result};
 
@@ -32,8 +32,8 @@ lazy_static! {
 }
 
 /// Overwrites a single field element with zeros.
-pub(crate) fn clear_fr(fr_ptr: *mut u8) {
-    unsafe { memzero(fr_ptr, *FR_SIZE) };
+pub(crate) fn clear_fr(fr_ptr: *const Fr) {
+    unsafe { memzero(fr_ptr as *mut u8, *FR_SIZE) };
 }
 
 pub(crate) struct MemRange {

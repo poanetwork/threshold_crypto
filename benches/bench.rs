@@ -5,8 +5,8 @@ extern crate rand;
 extern crate threshold_crypto;
 
 use criterion::Criterion;
-use pairing::bls12_381::Fr;
 use threshold_crypto::poly::Poly;
+use threshold_crypto::Fr;
 
 const TEST_DEGREES: [usize; 4] = [5, 10, 20, 40];
 const TEST_THRESHOLDS: [usize; 4] = [5, 10, 20, 40];
