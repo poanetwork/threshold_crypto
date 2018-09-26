@@ -23,8 +23,6 @@ use std::mem::size_of_val;
 use std::{cmp, iter, ops};
 
 use super::{Fr, G1Affine, G1};
-use errno::errno;
-use memsec::{memzero, mlock, munlock};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 
@@ -78,7 +76,7 @@ impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
             }
         }
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
-            self_c.add_assign(rhs_c);
+            Field::add_assign(self_c, rhs_c);
         }
         self.remove_zeros();
     }
@@ -146,7 +144,7 @@ impl<B: Borrow<Poly>> ops::SubAssign<B> for Poly {
             }
         }
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
-            self_c.sub_assign(rhs_c);
+            Field::sub_assign(self_c, rhs_c);
         }
         self.remove_zeros();
     }
@@ -237,7 +235,7 @@ impl ops::MulAssign<Fr> for Poly {
             self.coeff.clear();
         } else {
             for c in &mut self.coeff {
-                c.mul_assign(&rhs);
+                Field::mul_assign(c, &rhs);
             }
         }
     }
@@ -415,7 +413,7 @@ impl Poly {
         // We create a raw pointer to the field element within this method's stack frame so we can
         // overwrite that portion of memory with zeros once we have copied the element onto the
         // heap as part of the vector of polynomial coefficients.
-        let fr_ptr = &c as *const Fr as *mut u8;
+        let fr_ptr = &c as *const Fr;
         let poly = Poly::try_from(vec![c])
             .unwrap_or_else(|e| panic!("Failed to create constant `Poly`: {}", e));
         clear_fr(fr_ptr);
@@ -433,7 +431,7 @@ impl Poly {
         // We create a raw pointer to the field element within this method's stack frame so we can
         // overwrite that portion of memory with zeros once we have copied the element onto the
         // heap as part of polynomials `coeff` vector.
-        let fr_ptr = &c as *const Fr as *mut u8;
+        let fr_ptr = &c as *const Fr;
         let res = Poly::try_from(vec![c]);
         clear_fr(fr_ptr);
         res
