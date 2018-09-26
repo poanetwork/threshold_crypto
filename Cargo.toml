@@ -2,8 +2,12 @@
 name = "threshold_crypto"
 # REMINDER: Update version in `README.md` when incrementing:
 version = "0.1.0"
-authors = ["Andreas Fackler <AndreasFackler@gmx.de>",
-           "Peter van Nostrand <jnz@riseup.net>"]
+authors = ["Vladimir Komendantskiy <komendantsky@gmail.com>",
+           "Andreas Fackler <AndreasFackler@gmx.de>",
+           "Peter van Nostrand <jnz@riseup.net>",
+           "Andrew Gross <andogro@gmail.com>",
+           "Nick Sanders <nsan1129@gmail.com>",
+           "Marc Brinkmann <git@marcbrinkmann.de>"]
 description = "Pairing threshold cryptography"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/poanetwork/threshold_crypto"
