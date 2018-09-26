@@ -102,7 +102,7 @@ mod public_key_set_benches {
             move |b, &&threshold| {
                 let sk_set = SecretKeySet::random(threshold, &mut rng);
                 let pk_set = sk_set.public_keys();
-                let mut sig_parts: Vec<usize> = (0..threshold+1).collect();
+                let mut sig_parts: Vec<usize> = (0..threshold + 1).collect();
                 let pieces: &mut [usize] = &mut sig_parts;
                 let sigs: BTreeMap<_, _> = pieces
                     .iter()
@@ -111,7 +111,9 @@ mod public_key_set_benches {
                         (i, sig)
                     }).collect();
                 b.iter(|| {
-                    pk_set.combine_signatures(&sigs).expect("could not combine signatures");
+                    pk_set
+                        .combine_signatures(&sigs)
+                        .expect("could not combine signatures");
                 })
             },
             &TEST_THRESHOLDS,
@@ -126,6 +128,6 @@ mod public_key_set_benches {
 }
 
 criterion_main!(
-    //poly_benches::poly_benches,
+    poly_benches::poly_benches,
     public_key_set_benches::public_key_set_benches
 );
