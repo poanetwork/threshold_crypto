@@ -1,6 +1,6 @@
 language: rust
 rust:
-    - 1.29.0
+    - 1.29.1
 cache:
   cargo: true
   timeout: 1200
@@ -10,6 +10,7 @@ addons:
       - unzip
 before_install:
   - rustup component add --toolchain=${TRAVIS_RUST_VERSION} rustfmt-preview clippy-preview
+  - cargo install cargo-deadlinks
 env:
   global:
     - RUST_BACKTRACE=1
@@ -19,3 +20,5 @@ script:
   - cargo clippy --tests --examples --benches -- --deny clippy
   - cargo fmt -- --check
   - cargo test --all-features --release
+  - cargo doc
+  - cargo deadlinks --dir target/doc/threshold_crypto/
