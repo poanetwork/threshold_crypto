@@ -10,7 +10,7 @@ addons:
       - unzip
 before_install:
   - rustup component add --toolchain=${TRAVIS_RUST_VERSION} rustfmt-preview clippy-preview
-  - cargo install cargo-deadlinks
+  - cargo deadlinks --version || cargo install cargo-deadlinks
 env:
   global:
     - RUST_BACKTRACE=1
