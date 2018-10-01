@@ -145,9 +145,17 @@ impl PublicKey {
         self.verify_g2(sig, hash_g2(msg))
     }
 
-    /// Encrypts the message.
+    /// Encrypts the message using the OS random number generator.
+    ///
+    /// Uses the `OsRng` by default. To pass in a custom random number generator, use
+    /// `encrypt_with_rng()`.
     pub fn encrypt<M: AsRef<[u8]>>(&self, msg: M) -> Ciphertext {
-        let r: Fr = OsRng::new().expect(ERR_OS_RNG).gen();
+        self.encrypt_with_rng(&mut OsRng::new().expect(ERR_OS_RNG), msg)
+    }
+
+    /// Encrypts the message.
+    pub fn encrypt_with_rng<R: Rng, M: AsRef<[u8]>>(&self, rng: &mut R, msg: M) -> Ciphertext {
+        let r: Fr = rng.gen();
         let u = G1Affine::one().mul(r);
         let v: Vec<u8> = {
             let g = self.0.into_affine().mul(r);
