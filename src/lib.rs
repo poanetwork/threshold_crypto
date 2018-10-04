@@ -115,7 +115,7 @@ impl PublicKey {
         let u = G1Affine::one().mul(r);
         let v: Vec<u8> = {
             let g = self.0.into_affine().mul(r);
-            xor_vec(&hash_bytes(g, msg.as_ref().len()), msg.as_ref())
+            xor_with_hash(g, msg.as_ref())
         };
         let w = hash_g1_g2(u, &v).into_affine().mul(r);
         Ciphertext(u, v, w)
@@ -400,7 +400,7 @@ impl SecretKey {
         }
         let Ciphertext(ref u, ref v, _) = *ct;
         let g = u.into_affine().mul(*self.0);
-        Some(xor_vec(&hash_bytes(g, v.len()), v))
+        Some(xor_with_hash(g, v))
     }
 
     /// Generates a non-redacted debug string. This method differs from
@@ -599,7 +599,7 @@ impl PublicKeySet {
     {
         let samples = shares.into_iter().map(|(i, share)| (i, &share.0));
         let g = interpolate(self.commit.degree() + 1, samples)?;
-        Ok(xor_vec(&hash_bytes(g, ct.1.len()), &ct.1))
+        Ok(xor_with_hash(g, &ct.1))
     }
 }
 
@@ -715,19 +715,15 @@ fn hash_g1_g2<M: AsRef<[u8]>>(g1: G1, msg: M) -> G2 {
     hash_g2(&msg)
 }
 
-/// Returns a hash of the group element with the specified length in bytes.
-fn hash_bytes(g1: G1, len: usize) -> Vec<u8> {
+/// Returns the bitwise xor of `bytes` with a sequence of pseudorandom bytes determined by `g1`.
+fn xor_with_hash(g1: G1, bytes: &[u8]) -> Vec<u8> {
     let digest = sha3_256(g1.into_affine().into_compressed().as_ref());
     let seed = <[u32; CHACHA_RNG_SEED_SIZE]>::init_with_indices(|i| {
         BigEndian::read_u32(&digest.as_ref()[(4 * i)..(4 * i + 4)])
     });
     let mut rng = ChaChaRng::from_seed(&seed);
-    rng.gen_iter().take(len).collect()
-}
-
-/// Returns the bitwise xor.
-fn xor_vec(x: &[u8], y: &[u8]) -> Vec<u8> {
-    x.iter().zip(y).map(|(a, b)| a ^ b).collect()
+    let xor = |(a, b): (u8, &u8)| a ^ b;
+    rng.gen_iter().zip(bytes).map(xor).collect()
 }
 
 /// Given a list of `t` samples `(i - 1, f(i) * g)` for a polynomial `f` of degree `t - 1`, and a
@@ -931,16 +927,16 @@ mod tests {
 
     /// Some basic sanity checks for the `hash_bytes` function.
     #[test]
-    fn test_hash_bytes() {
+    fn test_xor_with_hash() {
         let mut rng = rand::thread_rng();
         let g0 = rng.gen();
         let g1 = rng.gen();
-        let hash = hash_bytes;
-        assert_eq!(hash(g0, 5), hash(g0, 5));
-        assert_ne!(hash(g0, 5), hash(g1, 5));
-        assert_eq!(5, hash(g0, 5).len());
-        assert_eq!(6, hash(g0, 6).len());
-        assert_eq!(20, hash(g0, 20).len());
+        let xwh = xor_with_hash;
+        assert_eq!(xwh(g0, &[0; 5]), xwh(g0, &[0; 5]));
+        assert_ne!(xwh(g0, &[0; 5]), xwh(g1, &[0; 5]));
+        assert_eq!(5, xwh(g0, &[0; 5]).len());
+        assert_eq!(6, xwh(g0, &[0; 6]).len());
+        assert_eq!(20, xwh(g0, &[0; 20]).len());
     }
 
     #[test]
