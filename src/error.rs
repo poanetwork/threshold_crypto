@@ -9,6 +9,8 @@ pub enum Error {
     NotEnoughShares,
     #[fail(display = "Signature shares contain a duplicated index")]
     DuplicateEntry,
+    #[fail(display = "The degree is too high for the coefficients to be indexed by usize.")]
+    DegreeTooHigh,
     #[fail(
         display = "Failed to `mlock` {} bytes starting at address: {}",
         n_bytes,

@@ -864,6 +864,14 @@ mod tests {
     }
 
     #[test]
+    fn test_random_extreme_thresholds() {
+        let mut rng = rand::thread_rng();
+        let sks = SecretKeySet::random(0, &mut rng);
+        assert_eq!(0, sks.threshold());
+        assert!(SecretKeySet::try_random(usize::max_value(), &mut rng).is_err());
+    }
+
+    #[test]
     fn test_threshold_enc() {
         let mut rng = rand::thread_rng();
         let sk_set = SecretKeySet::random(3, &mut rng);
