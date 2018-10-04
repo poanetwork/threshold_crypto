@@ -26,7 +26,7 @@ use pairing::bls12_381::{Fr, G1Affine, G1};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 
-use error::Result;
+use error::{Error, Result};
 use into_fr::IntoFr;
 use secret::{clear_fr, ContainsSecret, MemRange, Safe};
 
@@ -357,8 +357,12 @@ impl Poly {
     ///
     /// # Errors
     ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit or if
+    /// the degree is `usize::max_value()`.
     pub fn try_random<R: Rng>(degree: usize, rng: &mut R) -> Result<Self> {
+        if degree == usize::max_value() {
+            return Err(Error::DegreeTooHigh);
+        }
         let coeff: Vec<Fr> = (0..=degree).map(|_| rng.gen()).collect();
         Poly::try_from(coeff)
     }
@@ -744,9 +748,12 @@ impl BivarPoly {
     ///
     /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
     pub fn try_random<R: Rng>(degree: usize, rng: &mut R) -> Result<Self> {
+        let len = coeff_pos(degree, degree)
+            .and_then(|l| l.checked_add(1))
+            .ok_or(Error::DegreeTooHigh)?;
         let poly = BivarPoly {
             degree,
-            coeff: (0..coeff_pos(degree + 1, 0)).map(|_| rng.gen()).collect(),
+            coeff: (0..len).map(|_| rng.gen()).collect(),
         };
         poly.mlock_secret()?;
         Ok(poly)
@@ -765,7 +772,8 @@ impl BivarPoly {
         let mut result = Fr::zero();
         for (i, x_pow_i) in x_pow.into_iter().enumerate() {
             for (j, y_pow_j) in y_pow.iter().enumerate() {
-                let mut summand = self.coeff[coeff_pos(i, j)];
+                let index = coeff_pos(i, j).expect("polynomial degree too high");
+                let mut summand = self.coeff[index];
                 summand.mul_assign(&x_pow_i);
                 summand.mul_assign(y_pow_j);
                 result.add_assign(&summand);
@@ -797,7 +805,8 @@ impl BivarPoly {
                 // TODO: clear these secrets from the stack.
                 let mut result = Fr::zero();
                 for (j, x_pow_j) in x_pow.iter().enumerate() {
-                    let mut summand = self.coeff[coeff_pos(i, j)];
+                    let index = coeff_pos(i, j).expect("polynomial degree too high");
+                    let mut summand = self.coeff[index];
                     summand.mul_assign(x_pow_j);
                     result.add_assign(&summand);
                 }
@@ -832,13 +841,12 @@ impl BivarPoly {
 }
 
 /// A commitment to a symmetric bivariate polynomial.
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BivarCommitment {
     /// The polynomial's degree in each of the two variables.
-    degree: usize,
+    pub(crate) degree: usize,
     /// The commitments to the coefficients.
-    #[serde(with = "super::serde_impl::projective_vec")]
-    coeff: Vec<G1>,
+    pub(crate) coeff: Vec<G1>,
 }
 
 impl Hash for BivarCommitment {
@@ -864,7 +872,8 @@ impl BivarCommitment {
         let mut result = G1::zero();
         for (i, x_pow_i) in x_pow.into_iter().enumerate() {
             for (j, y_pow_j) in y_pow.iter().enumerate() {
-                let mut summand = self.coeff[coeff_pos(i, j)];
+                let index = coeff_pos(i, j).expect("polynomial degree too high");
+                let mut summand = self.coeff[index];
                 summand.mul_assign(x_pow_i);
                 summand.mul_assign(*y_pow_j);
                 result.add_assign(&summand);
@@ -880,7 +889,8 @@ impl BivarCommitment {
             .map(|i| {
                 let mut result = G1::zero();
                 for (j, x_pow_j) in x_pow.iter().enumerate() {
-                    let mut summand = self.coeff[coeff_pos(i, j)];
+                    let index = coeff_pos(i, j).expect("polynomial degree too high");
+                    let mut summand = self.coeff[index];
                     summand.mul_assign(*x_pow_j);
                     result.add_assign(&summand);
                 }
@@ -907,14 +917,12 @@ fn powers<T: IntoFr>(into_x: T, degree: usize) -> Vec<Fr> {
 }
 
 /// Returns the position of coefficient `(i, j)` in the vector describing a symmetric bivariate
-/// polynomial.
-fn coeff_pos(i: usize, j: usize) -> usize {
+/// polynomial. If `i` or `j` are too large to represent the position as a `usize`, `None` is
+/// returned.
+pub(crate) fn coeff_pos(i: usize, j: usize) -> Option<usize> {
     // Since the polynomial is symmetric, we can order such that `j >= i`.
-    if j >= i {
-        j * (j + 1) / 2 + i
-    } else {
-        i * (i + 1) / 2 + j
-    }
+    let (j, i) = if j >= i { (j, i) } else { (i, j) };
+    i.checked_add(j.checked_mul(j.checked_add(1)?)? / 2)
 }
 
 #[cfg(test)]
@@ -932,7 +940,7 @@ mod tests {
         let mut i = 0;
         let mut j = 0;
         for n in 0..100 {
-            assert_eq!(n, coeff_pos(i, j));
+            assert_eq!(Some(n), coeff_pos(i, j));
             if i >= j {
                 j += 1;
                 i = 0;
@@ -940,6 +948,8 @@ mod tests {
                 i += 1;
             }
         }
+        let too_large = 1 << (0usize.count_zeros() / 2);
+        assert_eq!(None, coeff_pos(0, too_large));
     }
 
     #[test]

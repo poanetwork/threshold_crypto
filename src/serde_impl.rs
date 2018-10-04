@@ -1,3 +1,45 @@
+use std::borrow::Cow;
+
+use pairing::bls12_381::G1;
+use serde::de::Error as DeserializeError;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use poly::{coeff_pos, BivarCommitment};
+
+const ERR_DEG: &str = "commitment degree does not match coefficients";
+
+/// A type with the same content as `BivarCommitment`, but that has not been validated yet.
+#[derive(Serialize, Deserialize)]
+struct WireBivarCommitment<'a> {
+    /// The polynomial's degree in each of the two variables.
+    degree: usize,
+    /// The commitments to the coefficients.
+    #[serde(with = "projective_vec")]
+    coeff: Cow<'a, [G1]>,
+}
+
+impl Serialize for BivarCommitment {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        WireBivarCommitment {
+            degree: self.degree,
+            coeff: Cow::Borrowed(&self.coeff),
+        }.serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for BivarCommitment {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let WireBivarCommitment { degree, coeff } = Deserialize::deserialize(d)?;
+        if coeff_pos(degree, degree).and_then(|l| l.checked_add(1)) != Some(coeff.len()) {
+            return Err(D::Error::custom(ERR_DEG));
+        }
+        Ok(BivarCommitment {
+            degree,
+            coeff: coeff.into(),
+        })
+    }
+}
+
 /// Serialization and deserialization of a group element's compressed representation.
 pub mod projective {
     use pairing::{CurveAffine, CurveProjective, EncodedPoint};
@@ -34,6 +76,7 @@ pub mod projective {
 /// Serialization and deserialization of vectors of projective curve elements.
 pub mod projective_vec {
     use std::borrow::Borrow;
+    use std::iter::FromIterator;
     use std::marker::PhantomData;
 
     use pairing::CurveProjective;
@@ -62,19 +105,21 @@ pub mod projective_vec {
         }
     }
 
-    pub fn serialize<S, C>(vec: &[C], s: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S, C, T>(vec: T, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
         C: CurveProjective,
+        T: AsRef<[C]>,
     {
-        let wrap_vec: Vec<CurveWrap<C, &C>> = vec.iter().map(CurveWrap::new).collect();
+        let wrap_vec: Vec<CurveWrap<C, &C>> = vec.as_ref().iter().map(CurveWrap::new).collect();
         wrap_vec.serialize(s)
     }
 
-    pub fn deserialize<'de, D, C>(d: D) -> Result<Vec<C>, D::Error>
+    pub fn deserialize<'de, D, C, T>(d: D) -> Result<T, D::Error>
     where
         D: Deserializer<'de>,
         C: CurveProjective,
+        T: FromIterator<C>,
     {
         let wrap_vec = <Vec<CurveWrap<C, C>>>::deserialize(d)?;
         Ok(wrap_vec.into_iter().map(|CurveWrap(c, _)| c).collect())
@@ -156,6 +201,8 @@ mod tests {
     use pairing::Engine;
     use rand::{self, Rng};
 
+    use poly::BivarPoly;
+
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Vecs<E: Engine> {
         #[serde(with = "super::projective_vec")]
@@ -180,5 +227,17 @@ mod tests {
         let ser_vecs = bincode::serialize(&vecs).expect("serialize vecs");
         let de_vecs = bincode::deserialize(&ser_vecs).expect("deserialize vecs");
         assert_eq!(vecs, de_vecs);
+    }
+
+    #[test]
+    fn bivar_commitment() {
+        let mut rng = rand::thread_rng();
+        for deg in 1..8 {
+            let poly = BivarPoly::random(deg, &mut rng);
+            let comm = poly.commitment();
+            let ser_comm = bincode::serialize(&comm).expect("serialize commitment");
+            let de_comm = bincode::deserialize(&ser_comm).expect("deserialize commitment");
+            assert_eq!(comm, de_comm);
+        }
     }
 }
