@@ -14,7 +14,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 extern crate memsec;
-extern crate pairing;
+pub extern crate pairing;
 extern crate rand;
 #[macro_use]
 extern crate rand_derive;
