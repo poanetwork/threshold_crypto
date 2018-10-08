@@ -51,32 +51,20 @@ fn main() {
 Run tests using the following command:
 
 ```
-$ MLOCK_SECRETS=false cargo test
+$ cargo test
 ```
-
-The test suite runs quickly without setting the envvar `MLOCK_SECRETS=false`,
-but runs even faster when it is set. Setting this envvar also ensures that
-tests won't fail if we reach the testing system's locked memory limit (which
-we won't hit unless the system's locked memory limit is set unreasonably low,
-i.e. 1-2 pages or the equivalent, 4-8 kilobytes).
 
 ### Examples
 
 Run examples from the [`examples`](examples) directory using:
 
 ```
-$ MLOCK_SECRETS=false cargo run --example <example name>
+$ cargo run --example <example name>
 ```
 
 Also see the
 [distributed_key_generation](https://github.com/poanetwork/threshold_crypto/blob/d81953b55d181311c2a4eed2b6c34059fcf3fdae/src/poly.rs#L967)
 test.
-
-### Environment Variables
-
-[`MLOCK_SECRETS`](https://github.com/poanetwork/threshold_crypto/blob/master/src/lib.rs#L51): Sets whether or not the Unix syscall [`mlock`](http://man7.org/linux/man-pages/man2/mlock.2.html) or WinAPI function [`VirtualLock`](https://msdn.microsoft.com/en-us/library/windows/desktop/aa366895(v=vs.85).aspx) is called on portions of memory containing secret values. This option is enabled by default (`MLOCK_SECRETS=true`). Disabling memory locking (`MLOCK_SECRETS=false`) allows secret values to be copied to disk, where they will not be zeroed on drop and may persist indefinitely. **Disabling memory locking should only be done in development and testing.** 
-
-Disabling memory locking is useful because it removes the possibility of tests failing due to reaching the testing system's locked memory limit. For example, if your crate uses `threshold_crypto` and you write a test that maintains hundreds or thousands of secrets in memory simultaneously, you run the risk of reaching your system's allowed number of locked pages, which will cause this library to fail.
 
 ## Application Details
 
