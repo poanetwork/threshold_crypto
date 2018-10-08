@@ -7,8 +7,6 @@ use std::ops::{Deref, DerefMut};
 use memsec::memzero;
 use Fr;
 
-use error::Result;
-
 lazy_static! {
     /// The size in bytes of a single field element.
     pub(crate) static ref FR_SIZE: usize = size_of::<Fr>();
@@ -89,10 +87,6 @@ where
     T: DerefMut,
 {
     pub(crate) fn new(x: T) -> Self {
-        Safe::try_new(x).unwrap_or_else(|e| panic!("Failed to create `Safe`: {}", e))
-    }
-
-    pub(crate) fn try_new(x: T) -> Result<Self> {
-        Ok(Safe(x))
+        Safe(x)
     }
 }

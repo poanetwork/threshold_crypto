@@ -41,8 +41,7 @@ pub struct Poly {
 /// Creates a new `Poly` with the same coefficients as another polynomial.
 impl Clone for Poly {
     fn clone(&self) -> Self {
-        Poly::try_from(self.coeff.clone())
-            .unwrap_or_else(|e| panic!("Failed to clone `Poly`: {}", e))
+        Poly::from(self.coeff.clone())
     }
 }
 
@@ -177,8 +176,7 @@ impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
                 coeffs[i + j].add_assign(&*tmp);
             }
         }
-        Poly::try_from(coeffs)
-            .unwrap_or_else(|e| panic!("Failed to create a new `Poly` during muliplication: {}", e))
+        Poly::from(coeffs)
     }
 }
 
@@ -265,8 +263,8 @@ impl Drop for Poly {
 /// Creates a new `Poly` instance from a vector of prime field elements representing the
 /// coefficients of the polynomial.
 impl From<Vec<Fr>> for Poly {
-    fn from(coeffs: Vec<Fr>) -> Self {
-        Poly::try_from(coeffs).unwrap_or_else(|e| panic!("Failed to create `Poly`: {}", e))
+    fn from(coeff: Vec<Fr>) -> Self {
+        Poly { coeff }
     }
 }
 
@@ -279,16 +277,11 @@ impl ContainsSecret for Poly {
 }
 
 impl Poly {
-    /// Creates a new `Poly` instance from a vector of prime field elements representing the
-    /// coefficients of the polynomial.
-    pub fn try_from(coeff: Vec<Fr>) -> Result<Self> {
-        let poly = Poly { coeff };
-        Ok(poly)
-    }
-
-    /// Creates a random polynomial. This constructor is identical to the `Poly::try_random()`
-    /// constructor in every way except that this constructor will panic where `random` would
-    /// return an error.
+    /// Creates a random polynomial.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `degree` is too large for the coefficients to fit into a `Vec`.
     pub fn random<R: Rng>(degree: usize, rng: &mut R) -> Self {
         Poly::try_random(degree, rng)
             .unwrap_or_else(|e| panic!("Failed to create random `Poly`: {}", e))
@@ -302,7 +295,7 @@ impl Poly {
             return Err(Error::DegreeTooHigh);
         }
         let coeff: Vec<Fr> = (0..=degree).map(|_| rng.gen()).collect();
-        Poly::try_from(coeff)
+        Ok(Poly::from(coeff))
     }
 
     /// Returns the polynomial with constant value `0`.
@@ -315,19 +308,9 @@ impl Poly {
         self.coeff.iter().all(|coeff| coeff.is_zero())
     }
 
-    /// Returns the polynomial with constant value `1`. This constructor is identical to
-    /// `Poly::try_one()` in every way except that this constructor panics where `Poly::try_one()`
-    /// would return an `Err`.
+    /// Returns the polynomial with constant value `1`.
     pub fn one() -> Self {
-        Poly::try_one()
-            .unwrap_or_else(|e| panic!("Failed to create constant `Poly` of value 1: {}", e))
-    }
-
-    /// Returns the polynomial with constant value `1`. This constructor is identical to
-    /// `Poly::one()` in every way except that this constructor returns `Err` if where `Poly::one()`
-    /// would panic.
-    pub fn try_one() -> Result<Self> {
-        Poly::try_constant(Fr::one())
+        Poly::constant(Fr::one())
     }
 
     /// Returns the polynomial with constant value `c`.
@@ -336,23 +319,9 @@ impl Poly {
         // overwrite that portion of memory with zeros once we have copied the element onto the
         // heap as part of the vector of polynomial coefficients.
         let fr_ptr = &c as *const Fr;
-        let poly = Poly::try_from(vec![c])
-            .unwrap_or_else(|e| panic!("Failed to create constant `Poly`: {}", e));
+        let poly = Poly::from(vec![c]);
         clear_fr(fr_ptr);
         poly
-    }
-
-    /// Returns the polynomial with constant value `c`. This constructor is identical to
-    /// `Poly::constant()` in every way except that this constructor returns an `Err` where
-    /// `constant` would panic.
-    pub fn try_constant(c: Fr) -> Result<Self> {
-        // We create a raw pointer to the field element within this method's stack frame so we can
-        // overwrite that portion of memory with zeros once we have copied the element onto the
-        // heap as part of polynomials `coeff` vector.
-        let fr_ptr = &c as *const Fr;
-        let res = Poly::try_from(vec![c]);
-        clear_fr(fr_ptr);
-        res
     }
 
     /// Returns the identity function, i.e. the polynomial "`x`".
@@ -360,45 +329,18 @@ impl Poly {
         Poly::monomial(1)
     }
 
-    /// Returns the identity function, i.e. the polynomial `x`.
-    pub fn try_identity() -> Result<Self> {
-        Poly::try_monomial(1)
-    }
-
     /// Returns the (monic) monomial: `x.pow(degree)`.
     pub fn monomial(degree: usize) -> Self {
-        Poly::try_monomial(degree).unwrap_or_else(|e| {
-            panic!(
-                "Failed to create monomial `Poly` of degree {}: {}",
-                degree, e
-            )
-        })
-    }
-
-    /// Returns the (monic) monomial: `x.pow(degree)`.
-    pub fn try_monomial(degree: usize) -> Result<Self> {
         let coeff: Vec<Fr> = iter::repeat(Fr::zero())
             .take(degree)
             .chain(iter::once(Fr::one()))
             .collect();
-        Poly::try_from(coeff)
+        Poly::from(coeff)
     }
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`.
     pub fn interpolate<T, U, I>(samples_repr: I) -> Self
-    where
-        I: IntoIterator<Item = (T, U)>,
-        T: IntoFr,
-        U: IntoFr,
-    {
-        Poly::try_interpolate(samples_repr)
-            .unwrap_or_else(|e| panic!("Failed to interpolate `Poly`: {}", e))
-    }
-
-    /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
-    /// `(x, f(x))`.
-    pub fn try_interpolate<T, U, I>(samples_repr: I) -> Result<Self>
     where
         I: IntoIterator<Item = (T, U)>,
         T: IntoFr,
@@ -445,16 +387,16 @@ impl Poly {
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`.
-    fn compute_interpolation(samples: &[(Fr, Fr)]) -> Result<Self> {
+    fn compute_interpolation(samples: &[(Fr, Fr)]) -> Self {
         if samples.is_empty() {
-            return Ok(Poly::zero());
+            return Poly::zero();
         }
         // Interpolates on the first `i` samples.
-        let mut poly = Poly::try_constant(samples[0].1)?;
+        let mut poly = Poly::constant(samples[0].1);
         let mut minus_s0 = samples[0].0;
         minus_s0.negate();
         // Is zero on the first `i` samples.
-        let mut base = Poly::try_from(vec![minus_s0, Fr::one()])?;
+        let mut base = Poly::from(vec![minus_s0, Fr::one()]);
 
         // We update `base` so that it is always zero on all previous samples, and `poly` so that
         // it has the correct values on the previous samples.
@@ -471,9 +413,9 @@ impl Poly {
             // Finally, multiply `base` by X - x, so that it is zero at `x`, too, now.
             let mut minus_x = *x;
             minus_x.negate();
-            base *= Poly::try_from(vec![minus_x, Fr::one()])?;
+            base *= Poly::from(vec![minus_x, Fr::one()]);
         }
-        Ok(poly)
+        poly
     }
 
     /// Generates a non-redacted debug string. This method differs from
@@ -603,6 +545,10 @@ impl ContainsSecret for BivarPoly {
 }
 impl BivarPoly {
     /// Creates a random polynomial.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the degree is too high for the coefficients to fit into a `Vec`.
     pub fn random<R: Rng>(degree: usize, rng: &mut R) -> Self {
         BivarPoly::try_random(degree, rng).unwrap_or_else(|e| {
             panic!(
@@ -649,12 +595,6 @@ impl BivarPoly {
 
     /// Returns the `x`-th row, as a univariate polynomial.
     pub fn row<T: IntoFr>(&self, x: T) -> Poly {
-        self.try_row(x)
-            .unwrap_or_else(|e| panic!("Failed to create `Poly` from row of `BivarPoly: {}`", e))
-    }
-
-    /// Returns the `x`-th row, as a univariate polynomial.
-    pub fn try_row<T: IntoFr>(&self, x: T) -> Result<Poly> {
         let x_pow = self.powers(x);
         let coeff: Vec<Fr> = (0..=self.degree)
             .map(|i| {
@@ -668,7 +608,7 @@ impl BivarPoly {
                 }
                 result
             }).collect();
-        Poly::try_from(coeff)
+        Poly::from(coeff)
     }
 
     /// Returns the corresponding commitment. That information can be shared publicly.

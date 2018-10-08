@@ -230,18 +230,16 @@ pub struct SecretKey(Box<Fr>);
 impl Default for SecretKey {
     fn default() -> Self {
         let mut fr = Fr::zero();
-        SecretKey::try_from_mut(&mut fr)
-            .unwrap_or_else(|e| panic!("Failed to create default `SecretKey`: {}", e))
+        SecretKey::from_mut(&mut fr)
     }
 }
 
 /// Creates a random `SecretKey` from a given RNG. If you do not need to specify your own RNG, you
-/// should use `SecretKey::random()` or `SecretKey::try_random()` as your constructor instead.
+/// should use `SecretKey::random()` as your constructor instead.
 impl Rand for SecretKey {
     fn rand<R: Rng>(rng: &mut R) -> Self {
         let mut fr = Fr::rand(rng);
-        SecretKey::try_from_mut(&mut fr)
-            .unwrap_or_else(|e| panic!("Failed to create random `SecretKey`: {}", e))
+        SecretKey::from_mut(&mut fr)
     }
 }
 
@@ -249,16 +247,11 @@ impl Rand for SecretKey {
 impl Clone for SecretKey {
     fn clone(&self) -> Self {
         let mut fr = *self.0;
-        SecretKey::try_from_mut(&mut fr)
-            .unwrap_or_else(|e| panic!("Failed to clone `SecretKey`: {}", e))
+        SecretKey::from_mut(&mut fr)
     }
 }
 
 /// Zeroes out and unlocks the memory allocated from the `SecretKey`'s field element.
-///
-/// # Panics
-///
-/// Panics if we fail to unlock the memory containing the field element.
 impl Drop for SecretKey {
     fn drop(&mut self) {
         self.zero_secret();
@@ -288,52 +281,23 @@ impl SecretKey {
     /// *WARNING* this constructor will overwrite the referenced `Fr` element with zeros after it
     /// has been copied onto the heap.
     pub fn from_mut(fr: &mut Fr) -> Self {
-        SecretKey::try_from_mut(fr)
-            .unwrap_or_else(|e| panic!("Falied to create `SecretKey`: {}", e))
-    }
-
-    /// Creates a new `SecretKey` from a mutable reference to a field element. This constructor
-    /// takes a reference to avoid any unnecessary stack copying/moving of secrets (i.e. the field
-    /// element). The field element is copied bytewise onto the heap, the resulting `Box` is
-    /// stored in the returned `SecretKey`.
-    ///
-    /// This constructor is identical to `SecretKey::from_mut()` in every way except that this
-    /// constructor will return an `Err` where `SecretKey::from_mut()` would panic.
-    ///
-    /// *WARNING* this constructor will overwrite the referenced `Fr` element with zeros after it
-    /// has been copied onto the heap.
-    pub fn try_from_mut(fr: &mut Fr) -> Result<Self> {
         let fr_ptr = fr as *mut Fr;
         let mut boxed_fr = Box::new(Fr::zero());
         unsafe {
             copy_nonoverlapping(fr_ptr, &mut *boxed_fr as *mut Fr, 1);
         }
         clear_fr(fr_ptr);
-        let sk = SecretKey(boxed_fr);
-        Ok(sk)
+        SecretKey(boxed_fr)
     }
 
     /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
     /// number generator, you should use the constructor: `SecretKey::rand()`. If you do not need
-    /// to specify your own RNG, you should use the `SecretKey::random()` and
-    /// `SecretKey::try_random()` constructors, which use
+    /// to specify your own RNG, you should use the `SecretKey::random()` constructor, which uses
     /// [`rand::thead_rng()`](https://docs.rs/rand/0.4.3/rand/fn.thread_rng.html) internally as
-    /// their RNG.
+    /// its RNG.
     pub fn random() -> Self {
         let mut rng = rand::thread_rng();
         SecretKey::rand(&mut rng)
-    }
-
-    /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
-    /// number generator, you should use the constructor: `SecretKey::rand()`. If you do not need
-    /// to specify your own RNG, you should use the `SecretKey::random()` and
-    /// `SecretKey::try_random()` constructors, which use
-    /// [`rand::thead_rng()`](https://docs.rs/rand/0.4.3/rand/fn.thread_rng.html) internally as
-    /// their RNG.
-    pub fn try_random() -> Result<Self> {
-        let mut rng = rand::thread_rng();
-        let mut fr = Fr::rand(&mut rng);
-        SecretKey::try_from_mut(&mut fr)
     }
 
     /// Returns the matching public key.
@@ -390,21 +354,7 @@ impl SecretKeyShare {
     /// *WARNING* this constructor will overwrite the pointed to `Fr` element with zeros once it
     /// has been copied into a new `SecretKeyShare`.
     pub fn from_mut(fr: &mut Fr) -> Self {
-        match SecretKey::try_from_mut(fr) {
-            Ok(sk) => SecretKeyShare(sk),
-            Err(e) => panic!(
-                "Failed to create `SecretKeyShare` from field element: {}",
-                e
-            ),
-        }
-    }
-
-    /// Creates a new `SecretKeyShare` from a mutable reference to a field element. This
-    /// constructor takes a reference to avoid any unnecessary stack copying/moving of secrets
-    /// field elements. The field element will be copied bytewise onto the heap, the resulting
-    /// `Box` is stored in the `SecretKey` which is then wrapped in a `SecretKeyShare`.
-    pub fn try_from_mut(fr: &mut Fr) -> Result<Self> {
-        SecretKey::try_from_mut(fr).map(SecretKeyShare)
+        SecretKeyShare(SecretKey::from_mut(fr))
     }
 
     /// Returns the matching public key share.
@@ -559,6 +509,10 @@ impl SecretKeySet {
     /// Creates a set of secret key shares, where any `threshold + 1` of them can collaboratively
     /// sign and decrypt. This constuctor is identical to the `SecretKey::try_random()` in every
     /// way except that this constructor panics if the other returns an error.
+    ///
+    /// # Panic
+    ///
+    /// Panics if the `threshold` is too large for the coefficients to fit into a `Vec`.
     pub fn random<R: Rng>(threshold: usize, rng: &mut R) -> Self {
         SecretKeySet::try_random(threshold, rng)
             .unwrap_or_else(|e| panic!("Failed to create random `SecretKeySet`: {}", e))
@@ -577,20 +531,10 @@ impl SecretKeySet {
         self.poly.degree()
     }
 
-    /// Returns the `i`-th secret key share. This method is identical to the
-    /// `.try_secret_key_share()` in every way except that this method panics if
-    /// where `.try_secret_key_share()` would return an `Err`.
+    /// Returns the `i`-th secret key share.
     pub fn secret_key_share<T: IntoFr>(&self, i: T) -> SecretKeyShare {
-        self.try_secret_key_share(i)
-            .unwrap_or_else(|e| panic!("Failed to create `SecretKeyShare`: {}", e))
-    }
-
-    /// Returns the `i`-th secret key share. This method is identical to the method
-    /// `.secret_key_share()` in every way except that this method returns an `Err` if
-    ///  where `.secret_key_share()` would panic.
-    pub fn try_secret_key_share<T: IntoFr>(&self, i: T) -> Result<SecretKeyShare> {
         let mut fr = self.poly.evaluate(into_fr_plus_1(i));
-        SecretKeyShare::try_from_mut(&mut fr)
+        SecretKeyShare::from_mut(&mut fr)
     }
 
     /// Returns the corresponding public key set. That information can be shared publicly.
