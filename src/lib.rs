@@ -227,11 +227,6 @@ impl fmt::Debug for SignatureShare {
 pub struct SecretKey(Box<Fr>);
 
 /// Creates a `SecretKey` containing the zero prime field element.
-///
-/// # Panics
-///
-/// Panics if we have reached the system's locked memory limit when locking the secret field
-/// element in RAM.
 impl Default for SecretKey {
     fn default() -> Self {
         let mut fr = Fr::zero();
@@ -242,11 +237,6 @@ impl Default for SecretKey {
 
 /// Creates a random `SecretKey` from a given RNG. If you do not need to specify your own RNG, you
 /// should use `SecretKey::random()` or `SecretKey::try_random()` as your constructor instead.
-///
-/// # Panics
-///
-/// Panics if we have reached the system's locked memory limit when locking the secret field
-/// element in RAM.
 impl Rand for SecretKey {
     fn rand<R: Rng>(rng: &mut R) -> Self {
         let mut fr = Fr::rand(rng);
@@ -256,11 +246,6 @@ impl Rand for SecretKey {
 }
 
 /// Creates a new `SecretKey` by cloning another `SecretKey`'s prime field element.
-///
-/// # Panics
-///
-/// Panics if we have reached the system's locked memory limit when locking the secret field
-/// element into RAM.
 impl Clone for SecretKey {
     fn clone(&self) -> Self {
         let mut fr = *self.0;
@@ -277,12 +262,8 @@ impl Clone for SecretKey {
 impl Drop for SecretKey {
     fn drop(&mut self) {
         self.zero_secret();
-        if let Err(e) = self.munlock_secret() {
-            panic!("Failed to drop `SecretKey`: {}", e);
-        }
     }
 }
-
 /// A debug statement where the secret prime field element is redacted.
 impl fmt::Debug for SecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -304,17 +285,8 @@ impl SecretKey {
     /// element). The field element is copied bytewise onto the heap, the resulting `Box` is
     /// stored in the returned `SecretKey`.
     ///
-    /// This constructor is identical to `SecretKey::try_from_mut()` in every way except that this
-    /// constructor will panic if locking memory into RAM fails, whereas
-    /// `SecretKey::try_from_mut()` returns an `Err`.
-    ///
     /// *WARNING* this constructor will overwrite the referenced `Fr` element with zeros after it
     /// has been copied onto the heap.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we reach the system's locked memory limit when locking the secret field element
-    /// into RAM.
     pub fn from_mut(fr: &mut Fr) -> Self {
         SecretKey::try_from_mut(fr)
             .unwrap_or_else(|e| panic!("Falied to create `SecretKey`: {}", e))
@@ -326,16 +298,10 @@ impl SecretKey {
     /// stored in the returned `SecretKey`.
     ///
     /// This constructor is identical to `SecretKey::from_mut()` in every way except that this
-    /// constructor will return an `Err` if locking memory into RAM fails, whereas
-    /// `SecretKey::from_mut()` will panic.
+    /// constructor will return an `Err` where `SecretKey::from_mut()` would panic.
     ///
     /// *WARNING* this constructor will overwrite the referenced `Fr` element with zeros after it
     /// has been copied onto the heap.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we reached the system's locked memory limit when locking
-    /// the secret field element into RAM.
     pub fn try_from_mut(fr: &mut Fr) -> Result<Self> {
         let fr_ptr = fr as *mut Fr;
         let mut boxed_fr = Box::new(Fr::zero());
@@ -344,7 +310,6 @@ impl SecretKey {
         }
         clear_fr(fr_ptr);
         let sk = SecretKey(boxed_fr);
-        sk.mlock_secret()?;
         Ok(sk)
     }
 
@@ -354,15 +319,6 @@ impl SecretKey {
     /// `SecretKey::try_random()` constructors, which use
     /// [`rand::thead_rng()`](https://docs.rs/rand/0.4.3/rand/fn.thread_rng.html) internally as
     /// their RNG.
-    ///
-    /// This constructor panics if it is unable to lock `SecretKey` memory into RAM, otherwise it
-    /// is identical to the constructor: `SecretKey::try_random()` (which instead of panicing
-    /// returns an `Err`).
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
-    /// `SecretKey`.
     pub fn random() -> Self {
         let mut rng = rand::thread_rng();
         SecretKey::rand(&mut rng)
@@ -374,14 +330,6 @@ impl SecretKey {
     /// `SecretKey::try_random()` constructors, which use
     /// [`rand::thead_rng()`](https://docs.rs/rand/0.4.3/rand/fn.thread_rng.html) internally as
     /// their RNG.
-    ///
-    /// This constructor returns an `Err` if it is unable to lock `SecretKey` memory into RAM,
-    /// otherwise it is identical to the constructor: `SecretKey::random()` (which will panic
-    /// instead of returning an `Err`).
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
     pub fn try_random() -> Result<Self> {
         let mut rng = rand::thread_rng();
         let mut fr = Fr::rand(&mut rng);
@@ -439,16 +387,8 @@ impl SecretKeyShare {
     /// field elements. The field element will be copied bytewise onto the heap, the resulting
     /// `Box` is stored in the `SecretKey` which is then wrapped in a `SecretKeyShare`.
     ///
-    /// This constructor is identical to `SecretKeyShare::try_from_mut()` in every way except that
-    /// this constructor will panic if locking memory into RAM fails, whereas
-    /// `SecretKeyShare::try_from_mut()` will return an `Err`.
-    ///
     /// *WARNING* this constructor will overwrite the pointed to `Fr` element with zeros once it
     /// has been copied into a new `SecretKeyShare`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we reach the systems locked memory limit.
     pub fn from_mut(fr: &mut Fr) -> Self {
         match SecretKey::try_from_mut(fr) {
             Ok(sk) => SecretKeyShare(sk),
@@ -463,17 +403,6 @@ impl SecretKeyShare {
     /// constructor takes a reference to avoid any unnecessary stack copying/moving of secrets
     /// field elements. The field element will be copied bytewise onto the heap, the resulting
     /// `Box` is stored in the `SecretKey` which is then wrapped in a `SecretKeyShare`.
-    ///
-    /// This constructor is identical to `SecretKeyShare::from_mut()` in every way except that this
-    /// constructor will return an `Err` if locking memory into RAM fails, whereas
-    /// `SecretKeyShare::from_mut()` will panic.
-    ///
-    /// *WARNING* this constructor will overwrite the pointed to `Fr` element with zeros once it
-    /// has been copied into a new `SecretKeyShare`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
     pub fn try_from_mut(fr: &mut Fr) -> Result<Self> {
         SecretKey::try_from_mut(fr).map(SecretKeyShare)
     }
@@ -629,11 +558,7 @@ impl From<Poly> for SecretKeySet {
 impl SecretKeySet {
     /// Creates a set of secret key shares, where any `threshold + 1` of them can collaboratively
     /// sign and decrypt. This constuctor is identical to the `SecretKey::try_random()` in every
-    /// way except that this constructor panics if locking secret values into RAM fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we reach the system's locked memory limit.
+    /// way except that this constructor panics if the other returns an error.
     pub fn random<R: Rng>(threshold: usize, rng: &mut R) -> Self {
         SecretKeySet::try_random(threshold, rng)
             .unwrap_or_else(|e| panic!("Failed to create random `SecretKeySet`: {}", e))
@@ -641,11 +566,7 @@ impl SecretKeySet {
 
     /// Creates a set of secret key shares, where any `threshold + 1` of them can collaboratively
     /// sign and decrypt. This constuctor is identical to the `SecretKey::random()` in every
-    /// way except that this constructor return an `Err` if locking secret values into RAM fails.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    /// way except that this constructor returns an `Err` where the `random` would panic.
     pub fn try_random<R: Rng>(threshold: usize, rng: &mut R) -> Result<Self> {
         Poly::try_random(threshold, rng).map(SecretKeySet::from)
     }
@@ -658,12 +579,7 @@ impl SecretKeySet {
 
     /// Returns the `i`-th secret key share. This method is identical to the
     /// `.try_secret_key_share()` in every way except that this method panics if
-    /// locking secret values into memory fails, whereas `.try_secret_key_share()`
-    /// returns an `Err`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we reach the system's locked memory limit.
+    /// where `.try_secret_key_share()` would return an `Err`.
     pub fn secret_key_share<T: IntoFr>(&self, i: T) -> SecretKeyShare {
         self.try_secret_key_share(i)
             .unwrap_or_else(|e| panic!("Failed to create `SecretKeyShare`: {}", e))
@@ -671,12 +587,7 @@ impl SecretKeySet {
 
     /// Returns the `i`-th secret key share. This method is identical to the method
     /// `.secret_key_share()` in every way except that this method returns an `Err` if
-    /// locking secret values into memory fails, whereas `.secret_key_share()` will
-    /// panic.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    ///  where `.secret_key_share()` would panic.
     pub fn try_secret_key_share<T: IntoFr>(&self, i: T) -> Result<SecretKeyShare> {
         let mut fr = self.poly.evaluate(into_fr_plus_1(i));
         SecretKeyShare::try_from_mut(&mut fr)
@@ -689,12 +600,7 @@ impl SecretKeySet {
         }
     }
 
-    /// Returns the secret master key. Panics if mlocking fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
-    /// `SecretKey`.
+    /// Returns the secret master key.
     #[cfg(test)]
     fn secret_key(&self) -> SecretKey {
         let mut fr = self.poly.evaluate(0);

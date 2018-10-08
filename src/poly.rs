@@ -39,11 +39,6 @@ pub struct Poly {
 }
 
 /// Creates a new `Poly` with the same coefficients as another polynomial.
-///
-/// # Panics
-///
-/// Panics if we reach the system's locked memory limit when locking the polynomial's coefficients
-/// into RAM.
 impl Clone for Poly {
     fn clone(&self) -> Self {
         Poly::try_from(self.coeff.clone())
@@ -58,9 +53,6 @@ impl Debug for Poly {
     }
 }
 
-/// # Panics
-///
-/// Panics if we reach the system's locked memory limit.
 #[cfg_attr(feature = "cargo-clippy", allow(suspicious_op_assign_impl))]
 impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
     fn add_assign(&mut self, rhs: B) {
@@ -68,12 +60,6 @@ impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
         let rhs_len = rhs.borrow().coeff.len();
         if rhs_len > len {
             self.coeff.resize(rhs_len, Fr::zero());
-            if let Err(e) = self.mlock_secret() {
-                panic!(
-                    "Failed to extend `Poly` memory lock during add-assign: {}",
-                    e
-                );
-            }
         }
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
             Field::add_assign(self_c, rhs_c);
@@ -99,18 +85,12 @@ impl<B: Borrow<Poly>> ops::Add<B> for Poly {
     }
 }
 
-/// # Panics
-///
-/// Panics if we reach the system's locked memory limit.
 impl<'a> ops::Add<Fr> for Poly {
     type Output = Poly;
 
     fn add(mut self, rhs: Fr) -> Self::Output {
         if self.is_zero() && !rhs.is_zero() {
             self.coeff.push(rhs);
-            if let Err(e) = self.mlock_secret() {
-                panic!("Failed to extend `Poly` memory lock during add: {}", e);
-            }
         } else {
             self.coeff[0].add_assign(&rhs);
             self.remove_zeros();
@@ -127,21 +107,12 @@ impl<'a> ops::Add<u64> for Poly {
     }
 }
 
-/// # Panics
-///
-/// Panics if we reach the system's locked memory limit.
 impl<B: Borrow<Poly>> ops::SubAssign<B> for Poly {
     fn sub_assign(&mut self, rhs: B) {
         let len = self.coeff.len();
         let rhs_len = rhs.borrow().coeff.len();
         if rhs_len > len {
             self.coeff.resize(rhs_len, Fr::zero());
-            if let Err(e) = self.mlock_secret() {
-                panic!(
-                    "Failed to extend `Poly` memory lock during sub-assign: {}",
-                    e
-                );
-            }
         }
         for (self_c, rhs_c) in self.coeff.iter_mut().zip(&rhs.borrow().coeff) {
             Field::sub_assign(self_c, rhs_c);
@@ -186,9 +157,6 @@ impl<'a> ops::Sub<u64> for Poly {
     }
 }
 
-/// # Panics
-///
-/// Panics if we reach the system's locked memory limit.
 // Clippy thinks using any `+` and `-` in a `Mul` implementation is suspicious.
 #[cfg_attr(feature = "cargo-clippy", allow(suspicious_arithmetic_impl))]
 impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
@@ -241,10 +209,6 @@ impl ops::MulAssign<Fr> for Poly {
     }
 }
 
-/// # Panics
-///
-/// This operation may panic if: when multiplying the polynomial by a zero field element, we fail
-/// to munlock the cleared `coeff` vector.
 impl<'a> ops::Mul<&'a Fr> for Poly {
     type Output = Poly;
 
@@ -292,25 +256,14 @@ impl ops::Mul<u64> for Poly {
     }
 }
 
-/// # Panics
-///
-/// Panics if we fail to munlock the `coeff` vector.
 impl Drop for Poly {
     fn drop(&mut self) {
         self.zero_secret();
-        if let Err(e) = self.munlock_secret() {
-            panic!("Failed to munlock `Poly` during drop: {}", e);
-        }
     }
 }
 
 /// Creates a new `Poly` instance from a vector of prime field elements representing the
-/// coefficients of the polynomial. We lock the region of the heap where the polynomial
-/// coefficients are allocated.
-///
-/// # Panics
-///
-/// Panics if we have reached the system's locked memory limit.
+/// coefficients of the polynomial.
 impl From<Vec<Fr>> for Poly {
     fn from(coeffs: Vec<Fr>) -> Self {
         Poly::try_from(coeffs).unwrap_or_else(|e| panic!("Failed to create `Poly`: {}", e))
@@ -327,38 +280,23 @@ impl ContainsSecret for Poly {
 
 impl Poly {
     /// Creates a new `Poly` instance from a vector of prime field elements representing the
-    /// coefficients of the polynomial. We lock the region of the heap where the polynomial
-    /// coefficients are allocated.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    /// coefficients of the polynomial.
     pub fn try_from(coeff: Vec<Fr>) -> Result<Self> {
         let poly = Poly { coeff };
-        poly.mlock_secret()?;
         Ok(poly)
     }
 
     /// Creates a random polynomial. This constructor is identical to the `Poly::try_random()`
-    /// constructor in every way except that this constructor will panic if locking the polynomial
-    /// coefficients into RAM fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have reached the system's locked memory limit.
+    /// constructor in every way except that this constructor will panic where `random` would
+    /// return an error.
     pub fn random<R: Rng>(degree: usize, rng: &mut R) -> Self {
         Poly::try_random(degree, rng)
             .unwrap_or_else(|e| panic!("Failed to create random `Poly`: {}", e))
     }
 
     /// Creates a random polynomial. This constructor is identical to the `Poly::random()`
-    /// constructor in every way except that this constructor will return an `Err` if locking the
-    /// polynomial coefficients into RAM fails.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit or if
-    /// the degree is `usize::max_value()`.
+    /// constructor in every way except that this constructor will return an `Err` where
+    /// `try_random` would return an error.
     pub fn try_random<R: Rng>(degree: usize, rng: &mut R) -> Result<Self> {
         if degree == usize::max_value() {
             return Err(Error::DegreeTooHigh);
@@ -368,10 +306,6 @@ impl Poly {
     }
 
     /// Returns the polynomial with constant value `0`.
-    ///
-    /// This constructor does not return a `Result` because the polynomial's `coeff` vector is
-    /// empty, which does not require memory locking. Memory locking will occur when the first
-    /// coefficient is added to the `coeff` vector.
     pub fn zero() -> Self {
         Poly { coeff: vec![] }
     }
@@ -382,33 +316,21 @@ impl Poly {
     }
 
     /// Returns the polynomial with constant value `1`. This constructor is identical to
-    /// `Poly::try_one()` in every way except that this constructor panics if locking the `coeff`
-    /// vector into RAM fails, whereas `Poly::try_one()` returns an `Err`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have reached the system's locked memory limit.
+    /// `Poly::try_one()` in every way except that this constructor panics where `Poly::try_one()`
+    /// would return an `Err`.
     pub fn one() -> Self {
         Poly::try_one()
             .unwrap_or_else(|e| panic!("Failed to create constant `Poly` of value 1: {}", e))
     }
 
     /// Returns the polynomial with constant value `1`. This constructor is identical to
-    /// `Poly::one()` in every way except that this constructor returns `Err` if locking the
-    /// `coeff` vector into RAM fails, whereas `Poly::one()` panics.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    /// `Poly::one()` in every way except that this constructor returns `Err` if where `Poly::one()`
+    /// would panic.
     pub fn try_one() -> Result<Self> {
         Poly::try_constant(Fr::one())
     }
 
-    /// Returns the polynomial with constant value `c`. Panics if memory locking fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have reached the systems's locked memory limit.
+    /// Returns the polynomial with constant value `c`.
     pub fn constant(c: Fr) -> Self {
         // We create a raw pointer to the field element within this method's stack frame so we can
         // overwrite that portion of memory with zeros once we have copied the element onto the
@@ -421,12 +343,8 @@ impl Poly {
     }
 
     /// Returns the polynomial with constant value `c`. This constructor is identical to
-    /// `Poly::constant()` in every way except that this constructor returns an `Err` if locking
-    /// the polynomial coefficients into RAM fails.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    /// `Poly::constant()` in every way except that this constructor returns an `Err` where
+    /// `constant` would panic.
     pub fn try_constant(c: Fr) -> Result<Self> {
         // We create a raw pointer to the field element within this method's stack frame so we can
         // overwrite that portion of memory with zeros once we have copied the element onto the
@@ -437,30 +355,17 @@ impl Poly {
         res
     }
 
-    /// Returns the identity function, i.e. the polynomial "`x`". Panics if mlocking fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have reached the system's locked memory limit.
+    /// Returns the identity function, i.e. the polynomial "`x`".
     pub fn identity() -> Self {
         Poly::monomial(1)
     }
 
-    /// Returns the identity function, i.e. the polynomial `x`. Returns an `Err` if mlocking
-    /// fails.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    /// Returns the identity function, i.e. the polynomial `x`.
     pub fn try_identity() -> Result<Self> {
         Poly::try_monomial(1)
     }
 
-    /// Returns the (monic) monomial: `x.pow(degree)`. Panics if mlocking fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have reached the systems's locked memory limit.
+    /// Returns the (monic) monomial: `x.pow(degree)`.
     pub fn monomial(degree: usize) -> Self {
         Poly::try_monomial(degree).unwrap_or_else(|e| {
             panic!(
@@ -470,11 +375,7 @@ impl Poly {
         })
     }
 
-    /// Returns the (monic) monomial: `x.pow(degree)`. Returns an `Err` if mlocking fails.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
+    /// Returns the (monic) monomial: `x.pow(degree)`.
     pub fn try_monomial(degree: usize) -> Result<Self> {
         let coeff: Vec<Fr> = iter::repeat(Fr::zero())
             .take(degree)
@@ -485,10 +386,6 @@ impl Poly {
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have reached the systems's locked memory limit.
     pub fn interpolate<T, U, I>(samples_repr: I) -> Self
     where
         I: IntoIterator<Item = (T, U)>,
@@ -501,10 +398,6 @@ impl Poly {
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
     pub fn try_interpolate<T, U, I>(samples_repr: I) -> Result<Self>
     where
         I: IntoIterator<Item = (T, U)>,
@@ -552,10 +445,6 @@ impl Poly {
 
     /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
     /// `(x, f(x))`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we hit the system's locked memory limit.
     fn compute_interpolation(samples: &[(Fr, Fr)]) -> Result<Self> {
         if samples.is_empty() {
             return Ok(Poly::zero());
@@ -680,32 +569,18 @@ pub struct BivarPoly {
     coeff: Vec<Fr>,
 }
 
-/// # Panics
-///
-/// Panics if we have hit the system's locked memory limit when `mlock`ing the new instance of
-/// `BivarPoly`.
 impl Clone for BivarPoly {
     fn clone(&self) -> Self {
-        let poly = BivarPoly {
+        BivarPoly {
             degree: self.degree,
             coeff: self.coeff.clone(),
-        };
-        if let Err(e) = poly.mlock_secret() {
-            panic!("Failed to clone `BivarPoly`: {}", e);
         }
-        poly
     }
 }
 
-/// # Panics
-///
-/// Panics if we fail to munlock the `coeff` vector.
 impl Drop for BivarPoly {
     fn drop(&mut self) {
         self.zero_secret();
-        if let Err(e) = self.munlock_secret() {
-            panic!("Failed to munlock `BivarPoly` during drop: {}", e);
-        }
     }
 }
 
@@ -726,13 +601,8 @@ impl ContainsSecret for BivarPoly {
         MemRange { ptr, n_bytes }
     }
 }
-
 impl BivarPoly {
     /// Creates a random polynomial.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have hit the system's locked memory limit.
     pub fn random<R: Rng>(degree: usize, rng: &mut R) -> Self {
         BivarPoly::try_random(degree, rng).unwrap_or_else(|e| {
             panic!(
@@ -743,10 +613,6 @@ impl BivarPoly {
     }
 
     /// Creates a random polynomial.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit.
     pub fn try_random<R: Rng>(degree: usize, rng: &mut R) -> Result<Self> {
         let len = coeff_pos(degree, degree)
             .and_then(|l| l.checked_add(1))
@@ -755,7 +621,6 @@ impl BivarPoly {
             degree,
             coeff: (0..len).map(|_| rng.gen()).collect(),
         };
-        poly.mlock_secret()?;
         Ok(poly)
     }
 
@@ -783,21 +648,12 @@ impl BivarPoly {
     }
 
     /// Returns the `x`-th row, as a univariate polynomial.
-    ///
-    /// # Panics
-    ///
-    /// Panics if we have reached the system's locked memory limit.
     pub fn row<T: IntoFr>(&self, x: T) -> Poly {
         self.try_row(x)
             .unwrap_or_else(|e| panic!("Failed to create `Poly` from row of `BivarPoly: {}`", e))
     }
 
     /// Returns the `x`-th row, as a univariate polynomial.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `Error::MlockFailed` if we have reached the systems's locked memory limit when
-    /// creating the new `Poly` instance.
     pub fn try_row<T: IntoFr>(&self, x: T) -> Result<Poly> {
         let x_pow = self.powers(x);
         let coeff: Vec<Fr> = (0..=self.degree)
