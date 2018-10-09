@@ -596,27 +596,40 @@ where
 {
     let samples: Vec<_> = items
         .into_iter()
+        .take(t)
         .map(|(i, sample)| (into_fr_plus_1(i), sample))
         .collect();
     if samples.len() < t {
         return Err(Error::NotEnoughShares);
     }
+
+    // Compute the products `x_prod[i]` of all but the `i`-th entry.
+    let mut x_prod: Vec<C::Scalar> = Vec::with_capacity(t);
+    let mut tmp = C::Scalar::one();
+    x_prod.push(tmp);
+    for (x, _) in samples.iter().take(t - 1) {
+        tmp.mul_assign(x);
+        x_prod.push(tmp);
+    }
+    tmp = C::Scalar::one();
+    let mut i = t - 2;
+    for (x, _) in samples[1..].iter().rev() {
+        tmp.mul_assign(x);
+        x_prod[i].mul_assign(&tmp);
+        i -= 1;
+    }
+
     let mut result = C::zero();
-    let mut indexes = Vec::new();
-    for (x, sample) in samples.iter().take(t) {
-        if indexes.contains(x) {
-            return Err(Error::DuplicateEntry);
-        }
-        indexes.push(x.clone());
+    for (mut l0, (x, sample)) in x_prod.into_iter().zip(&samples) {
         // Compute the value at 0 of the Lagrange polynomial that is `0` at the other data
         // points but `1` at `x`.
-        let mut l0 = C::Scalar::one();
-        for (x0, _) in samples.iter().take(t).filter(|(x0, _)| x0 != x) {
-            let mut denom = *x0;
-            denom.sub_assign(x);
-            l0.mul_assign(x0);
-            l0.mul_assign(&denom.inverse().expect("indices are different"));
+        let mut denom = C::Scalar::one();
+        for (x0, _) in samples.iter().filter(|(x0, _)| x0 != x) {
+            let mut diff = *x0;
+            diff.sub_assign(x);
+            denom.mul_assign(&diff);
         }
+        l0.mul_assign(&denom.inverse().ok_or(Error::DuplicateEntry)?);
         result.add_assign(&sample.into_affine().mul(l0));
     }
     Ok(result)
