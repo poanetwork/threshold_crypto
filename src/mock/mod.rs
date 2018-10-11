@@ -2,7 +2,7 @@
 //!
 //! Affectionately known as *mocktography*, the `mock` module implements a valid `pairing::Engine`
 //! on top of simpler cryptographic primitives; instead of elliptic curves, a simple finite field of
-//! mersenne prime order is used. The resulting engine is trivially breakable (the key space is
+//! Mersenne prime order is used. The resulting engine is trivially breakable (the key space is
 //! smaller than 2^31), but should not produce accidental collisions at an unacceptable rate.
 //!
 //! As a result, all "cryptographic" operations can be carried out much faster. This module is
