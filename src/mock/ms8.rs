@@ -394,10 +394,10 @@ impl PrimeFieldRepr for Mersenne8 {
     }
 }
 
-/// Extended euclidean algorithm
+/// Extended Euclidean algorithm
 ///
 /// Returns the `gcd(a,b)`, as well as the
-/// [Bézeout coefficients](https://en.wikipedia.org/wiki/B%C3%A9zout%27s_identity) `s` and `t` (with
+/// [Bézout coefficients](https://en.wikipedia.org/wiki/B%C3%A9zout%27s_identity) `s` and `t` (with
 /// `sa + tb = gcd(a,b)`).
 ///
 /// The function will neither panic nor overflow; however passing in `0` as either `a` or `b`
@@ -428,7 +428,7 @@ mod tests {
     // There are copy & pasted results of calculations from external programs in these tests.
     #![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
     #![cfg_attr(feature = "cargo-clippy", allow(op_ref))]
-    // We test a few mathematical identifies, including `c - c = 0`. Clippy complains about these
+    // We test a few mathematical identities, including `c - c = 0`. Clippy complains about these
     // otherwise unusual expressions, so the lint is disabled.
     #![cfg_attr(feature = "cargo-clippy", allow(eq_op))]
 
