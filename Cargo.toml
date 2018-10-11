@@ -19,6 +19,7 @@ categories = ["cryptography"]
 byteorder = "1.2.3"
 errno = "0.2.4"
 failure = "0.1"
+hex_fmt = "0.1"
 init_with = "1.1.0"
 lazy_static = "1.1.0"
 log = "0.4.1"

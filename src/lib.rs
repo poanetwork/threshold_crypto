@@ -8,6 +8,7 @@ extern crate byteorder;
 extern crate errno;
 #[macro_use]
 extern crate failure;
+extern crate hex_fmt;
 extern crate init_with;
 #[macro_use]
 extern crate lazy_static;
@@ -36,6 +37,7 @@ use std::hash::{Hash, Hasher};
 use std::ptr::copy_nonoverlapping;
 
 use byteorder::{BigEndian, ByteOrder};
+use hex_fmt::HexFmt;
 use init_with::InitWith;
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
@@ -56,28 +58,6 @@ pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};
 //     Ms8Projective as G1, Ms8Projective as G2,
 // };
 
-/// Wrapper for a byte array, whose `Debug` implementation outputs shortened hexadecimal strings.
-pub struct HexBytes<'a>(pub &'a [u8]);
-
-impl<'a> fmt::Debug for HexBytes<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.0.len() > 6 {
-            for byte in &self.0[..3] {
-                write!(f, "{:02x}", byte)?;
-            }
-            write!(f, "..")?;
-            for byte in &self.0[(self.0.len() - 3)..] {
-                write!(f, "{:02x}", byte)?;
-            }
-        } else {
-            for byte in self.0 {
-                write!(f, "{:02x}", byte)?;
-            }
-        }
-        Ok(())
-    }
-}
-
 /// The number of words (`u32`) in a ChaCha RNG seed.
 const CHACHA_RNG_SEED_SIZE: usize = 8;
 
@@ -96,8 +76,7 @@ impl Hash for PublicKey {
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
-        f.debug_tuple("PublicKey").field(&HexBytes(bytes)).finish()
+        f.debug_tuple("PublicKey").field(&HexFmt(uncomp)).finish()
     }
 }
 
@@ -145,9 +124,8 @@ pub struct PublicKeyShare(PublicKey);
 impl fmt::Debug for PublicKeyShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
         f.debug_tuple("PublicKeyShare")
-            .field(&HexBytes(bytes))
+            .field(&HexFmt(uncomp))
             .finish()
     }
 }
@@ -184,8 +162,7 @@ pub struct Signature(#[serde(with = "serde_impl::projective")] G2);
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
-        f.debug_tuple("Signature").field(&HexBytes(bytes)).finish()
+        f.debug_tuple("Signature").field(&HexFmt(uncomp)).finish()
     }
 }
 
@@ -198,10 +175,9 @@ impl Hash for Signature {
 impl Signature {
     pub fn parity(&self) -> bool {
         let uncomp = self.0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
-        let xor_bytes: u8 = bytes.iter().fold(0, |result, byte| result ^ byte);
+        let xor_bytes: u8 = uncomp.as_ref().iter().fold(0, |result, byte| result ^ byte);
         let parity = 0 != xor_bytes.count_ones() % 2;
-        debug!("Signature: {:?}, output: {}", HexBytes(bytes), parity);
+        debug!("Signature: {}, parity: {}", HexFmt(uncomp), parity);
         parity
     }
 }
@@ -214,9 +190,8 @@ pub struct SignatureShare(pub Signature);
 impl fmt::Debug for SignatureShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
         f.debug_tuple("SignatureShare")
-            .field(&HexBytes(bytes))
+            .field(&HexFmt(uncomp))
             .finish()
     }
 }
@@ -252,7 +227,7 @@ impl Clone for SecretKey {
     }
 }
 
-/// Zeroes out and unlocks the memory allocated from the `SecretKey`'s field element.
+/// Zeroes out the memory allocated from the `SecretKey`'s field element.
 impl Drop for SecretKey {
     fn drop(&mut self) {
         self.zero_secret();
@@ -331,8 +306,7 @@ impl SecretKey {
     /// field element.
     pub fn reveal(&self) -> String {
         let uncomp = self.public_key().0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
-        format!("SecretKey({:?})", HexBytes(bytes))
+        format!("SecretKey({})", HexFmt(uncomp))
     }
 }
 
@@ -391,8 +365,7 @@ impl SecretKeyShare {
     /// field element.
     pub fn reveal(&self) -> String {
         let uncomp = self.0.public_key().0.into_affine().into_uncompressed();
-        let bytes = uncomp.as_ref();
-        format!("SecretKeyShare({:?})", HexBytes(bytes))
+        format!("SecretKeyShare({})", HexFmt(uncomp))
     }
 }
 
