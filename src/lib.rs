@@ -1,6 +1,15 @@
 // Clippy warns that it's dangerous to derive `PartialEq` and explicitly implement `Hash`, but the
 // `pairing::bls12_381` types don't implement `Hash`, so we can't derive it.
 #![cfg_attr(feature = "cargo-clippy", allow(derive_hash_xor_eq))]
+// When using the mocktography, the resulting field elements become wrapped `u32`s, suddenly
+// triggering pass-by-reference warnings. They are conditionally disabled for this reason:
+#![cfg_attr(
+    all(
+        feature = "cargo-clippy",
+        feature = "use-insecure-test-only-mock-crypto"
+    ),
+    allow(trivially_copy_pass_by_ref)
+)]
 
 #[cfg(test)]
 extern crate bincode;
@@ -46,15 +55,17 @@ use into_fr::IntoFr;
 use poly::{Commitment, Poly};
 use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
 
-// #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};
 
-// TODO: Add mock cryptography for tests.
-// #[cfg(feature = "use-insecure-test-only-mock-crypto")]
-// pub use pairing::mock::{
-//     Mersenne8 as Fr, Mocktography as PEngine, Ms8Affine as G1Affine, Ms8Affine as G2Affine,
-//     Ms8Projective as G1, Ms8Projective as G2,
-// };
+#[cfg(feature = "use-insecure-test-only-mock-crypto")]
+mod mock;
+
+#[cfg(feature = "use-insecure-test-only-mock-crypto")]
+pub use mock::{
+    Mersenne8 as Fr, Mocktography as PEngine, Ms8Affine as G1Affine, Ms8Affine as G2Affine,
+    Ms8Projective as G1, Ms8Projective as G2,
+};
 
 /// Wrapper for a byte array, whose `Debug` implementation outputs shortened hexadecimal strings.
 pub struct HexBytes<'a>(pub &'a [u8]);
