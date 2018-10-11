@@ -14,7 +14,6 @@ extern crate lazy_static;
 #[macro_use]
 extern crate log;
 extern crate memsec;
-pub extern crate pairing;
 extern crate rand;
 #[macro_use]
 extern crate rand_derive;
@@ -23,10 +22,13 @@ extern crate serde;
 extern crate serde_derive;
 extern crate tiny_keccak;
 
-pub mod error;
+pub extern crate pairing;
+
 mod into_fr;
-pub mod poly;
 mod secret;
+
+pub mod error;
+pub mod poly;
 pub mod serde_impl;
 
 use std::fmt;
@@ -35,6 +37,14 @@ use std::ptr::copy_nonoverlapping;
 
 use byteorder::{BigEndian, ByteOrder};
 use init_with::InitWith;
+use pairing::{CurveAffine, CurveProjective, Engine, Field};
+use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
+use tiny_keccak::sha3_256;
+
+use error::{Error, Result};
+use into_fr::IntoFr;
+use poly::{Commitment, Poly};
+use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
 
 // #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};
@@ -45,15 +55,6 @@ pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};
 //     Mersenne8 as Fr, Mocktography as PEngine, Ms8Affine as G1Affine, Ms8Affine as G2Affine,
 //     Ms8Projective as G1, Ms8Projective as G2,
 // };
-
-use pairing::{CurveAffine, CurveProjective, Engine, Field};
-use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
-use tiny_keccak::sha3_256;
-
-use error::{Error, Result};
-use into_fr::IntoFr;
-use poly::{Commitment, Poly};
-use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
 
 /// Wrapper for a byte array, whose `Debug` implementation outputs shortened hexadecimal strings.
 pub struct HexBytes<'a>(pub &'a [u8]);
