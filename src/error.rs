@@ -11,8 +11,18 @@ pub enum Error {
     DegreeTooHigh,
 }
 
-unsafe impl Send for Error {}
-unsafe impl Sync for Error {}
-
 /// A crypto result.
 pub type Result<T> = ::std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+
+    /// No-op function that compiles only if its argument is `Send + Sync`.
+    fn is_send_and_sync<T: Send + Sync>(_: T) {}
+
+    #[test]
+    fn errors_are_send_and_sync() {
+        is_send_and_sync(Error::NotEnoughShares);
+    }
+}
