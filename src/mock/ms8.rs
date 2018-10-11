@@ -6,6 +6,7 @@
 //!
 //! The resulting type also implements the `Field`, `PrimeField` and `SqrtField` traits. For
 //! convenience, `PrimeFieldRepr` is also implemented.
+
 use std::io::{self, Read, Write};
 use std::{fmt, ops};
 

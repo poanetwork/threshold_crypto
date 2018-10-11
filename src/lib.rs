@@ -1,6 +1,15 @@
 // Clippy warns that it's dangerous to derive `PartialEq` and explicitly implement `Hash`, but the
 // `pairing::bls12_381` types don't implement `Hash`, so we can't derive it.
 #![cfg_attr(feature = "cargo-clippy", allow(derive_hash_xor_eq))]
+// When using the mocktography, the resulting field elements become wrapped `u32`s, suddenly
+// triggering pass-by-reference warnings. They are conditionally disabled for this reason:
+#![cfg_attr(
+    all(
+        feature = "cargo-clippy",
+        feature = "use-insecure-test-only-mock-crypto"
+    ),
+    allow(trivially_copy_pass_by_ref)
+)]
 
 #[cfg(test)]
 extern crate bincode;
