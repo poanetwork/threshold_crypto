@@ -44,7 +44,7 @@ fn modular_pow(base: u32, mut exp: u32, modulus: u32) -> u32 {
 }
 
 /// Eigth Mersenne prime, aka `i32::MAX`.
-pub const MS8: u32 = 2_147_483_647;
+pub const MS8: u32 = 0x7fff_ffff;
 
 /// Eighth Mersenne prime field element
 ///
