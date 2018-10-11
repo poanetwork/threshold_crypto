@@ -8,7 +8,7 @@
 //! convenience, `PrimeFieldRepr` is also implemented.
 
 use std::io::{self, Read, Write};
-use std::{fmt, ops};
+use std::{fmt, mem, ops};
 
 use byteorder::{BigEndian, ByteOrder};
 use pairing::{
@@ -339,7 +339,7 @@ impl PrimeFieldRepr for Mersenne8 {
 
     #[inline]
     fn num_bits(&self) -> u32 {
-        64
+        8 * mem::sizeof<Self>()
     }
 
     #[inline]
