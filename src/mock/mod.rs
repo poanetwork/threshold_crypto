@@ -14,8 +14,7 @@ pub mod ms8;
 
 use std::{fmt, mem, slice};
 
-use pairing::{EncodedPoint, GroupDecodingError};
-use pairing::{Field, PrimeField};
+use pairing::{EncodedPoint, Field, GroupDecodingError, PrimeField};
 use rand;
 
 use super::{CurveAffine, CurveProjective, Engine};
