@@ -339,7 +339,7 @@ impl PrimeFieldRepr for Mersenne8 {
 
     #[inline]
     fn num_bits(&self) -> u32 {
-        8 * mem::sizeof<Self>()
+        8 * mem::size_of::<Self>() as u32
     }
 
     #[inline]
