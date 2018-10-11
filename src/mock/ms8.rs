@@ -136,9 +136,9 @@ generate_op_impls!(Mersenne8, Add, AddAssign, add, add_assign);
 impl ops::MulAssign for Mersenne8 {
     #[inline]
     fn mul_assign(&mut self, rhs: Mersenne8) {
-        // Usually, Schrage's method would a good way to implement the multiplication;
+        // Usually, Schrage's method would be a good way to implement the multiplication;
         // however, since we will mostly be running the code on 64-bit machines and
-        // `(2^31-1)^2 < 2^64`, we can cheat and do this fairly fast in in 64 bits.
+        // `(2^31-1)^2 < 2^64`, we can cheat and do this fairly fast in 64 bits.
         self.0 = (u64::from(self.0) * u64::from(rhs.0) % u64::from(MS8)) as u32;
     }
 }
