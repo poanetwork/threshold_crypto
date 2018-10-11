@@ -29,6 +29,7 @@ rand_derive = "0.3.1"
 serde = "1.0.55"
 serde_derive = "1.0.55"
 tiny-keccak = "1.4"
+ff = { version = "0.4.0", optional = true }
 
 [dev-dependencies]
 bincode = "1.0.0"
@@ -41,4 +42,4 @@ name = "bench"
 harness = false
 
 [features]
-use-insecure-test-only-mock-crypto = []
+use-insecure-test-only-mock-crypto = ["ff"]

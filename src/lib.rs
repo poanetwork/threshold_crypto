@@ -46,15 +46,17 @@ use into_fr::IntoFr;
 use poly::{Commitment, Poly};
 use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
 
-// #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};
 
-// TODO: Add mock cryptography for tests.
-// #[cfg(feature = "use-insecure-test-only-mock-crypto")]
-// pub use pairing::mock::{
-//     Mersenne8 as Fr, Mocktography as PEngine, Ms8Affine as G1Affine, Ms8Affine as G2Affine,
-//     Ms8Projective as G1, Ms8Projective as G2,
-// };
+#[cfg(feature = "use-insecure-test-only-mock-crypto")]
+mod mock;
+
+#[cfg(feature = "use-insecure-test-only-mock-crypto")]
+pub use mock::{
+    Mersenne8 as Fr, Mocktography as PEngine, Ms8Affine as G1Affine, Ms8Affine as G2Affine,
+    Ms8Projective as G1, Ms8Projective as G2,
+};
 
 /// Wrapper for a byte array, whose `Debug` implementation outputs shortened hexadecimal strings.
 pub struct HexBytes<'a>(pub &'a [u8]);
