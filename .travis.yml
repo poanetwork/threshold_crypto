@@ -18,6 +18,7 @@ env:
     - RUSTFLAGS="-D warnings -C target-cpu=native"
 script:
   - cargo clippy --tests --examples --benches -- --deny clippy
+  - cargo clippy --all-features --tests --examples --benches -- --deny clippy
   - cargo fmt -- --check
   - cargo test --release
   - cargo test --all-features --release
