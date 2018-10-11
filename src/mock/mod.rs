@@ -275,6 +275,9 @@ impl EncodedPoint for Ms8Affine {
 
 #[cfg(test)]
 mod test {
+    // There are copy & pasted results of calculations from external programs in these tests.
+    #![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
+
     use super::{Mersenne8, Mocktography, Ms8Affine};
     use Engine;
 
@@ -290,7 +293,7 @@ mod test {
             (456789123, 456789123, 1405297315),
         ];
 
-        for (p, q, res) in pqs.into_iter() {
+        for (p, q, res) in pqs {
             let p = Ms8Affine(p.into());
             let q = Ms8Affine(q.into());
             println!("P, Q: {}, {}", p, q);

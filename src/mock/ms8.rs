@@ -425,6 +425,13 @@ fn ext_euclid(a: u32, b: u32) -> (u32, i64, i64) {
 
 #[cfg(test)]
 mod tests {
+    // There are copy & pasted results of calculations from external programs in these tests.
+    #![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
+    #![cfg_attr(feature = "cargo-clippy", allow(op_ref))]
+    // We test a few mathematical identifies, including `c - c = 0`. Clippy complains about these
+    // otherwise unusual expressions, so the lint is disabled.
+    #![cfg_attr(feature = "cargo-clippy", allow(eq_op))]
+
     use super::{ext_euclid, modular_pow, Mersenne8};
     use pairing::Field;
 
@@ -762,14 +769,14 @@ mod tests {
         let g = Mersenne8::new(2147483646);
         let h = Mersenne8::new(923042);
 
-        let mut a_fm = a.clone();
-        let mut b_fm = b.clone();
-        let mut c_fm = c.clone();
-        let mut d_fm = d.clone();
-        let mut e_fm = e.clone();
-        let mut f_fm = f.clone();
-        let mut g_fm = g.clone();
-        let mut h_fm = h.clone();
+        let mut a_fm = a;
+        let mut b_fm = b;
+        let mut c_fm = c;
+        let mut d_fm = d;
+        let mut e_fm = e;
+        let mut f_fm = f;
+        let mut g_fm = g;
+        let mut h_fm = h;
 
         a_fm.frobenius_map(1);
         a_fm.frobenius_map(2);
