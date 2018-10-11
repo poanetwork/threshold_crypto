@@ -1,3 +1,15 @@
+//! Mock cryptography implementation of a `pairing` engine.
+//!
+//! Affectionately known as *mocktography*, the `mock` module implements a valid `pairing::Engine`
+//! on top of simpler cryptographic primitives; instead of elliptic curves, a simple finite field of
+//! mersenne prime order is used. The resulting engine is trivially breakable (the key space is
+//! smaller than 2^31), but should not produce accidental collisions at an unacceptable rate.
+//!
+//! As a result, all "cryptographic" operations can be carried out much faster. This module is
+//! intended to be used during unit-tests of applications that build on top of `threshold_crypto`;
+//! enabling this in production code of any application will immediately break its cryptographic
+//! security.
+
 pub mod ms8;
 
 use std::{fmt, mem, slice};
@@ -10,12 +22,15 @@ use super::{CurveAffine, CurveProjective, Engine};
 
 pub use self::ms8::Mersenne8;
 
+/// A `pairing` Engine based on `Mersenne8` prime fields.
 #[derive(Clone, Debug)]
 pub struct Mocktography;
 
+/// Affine type for `Mersenne8`.
 #[derive(Copy, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Ms8Affine(Mersenne8);
 
+/// Projective type for `Mersenne8`.
 #[derive(Copy, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Ms8Projective(Mersenne8);
 
