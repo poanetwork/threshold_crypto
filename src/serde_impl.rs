@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use pairing::bls12_381::G1;
+use super::G1;
 use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

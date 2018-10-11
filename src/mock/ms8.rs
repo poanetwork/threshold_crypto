@@ -9,10 +9,10 @@
 use std::io::{self, Read, Write};
 use std::{fmt, ops};
 
-use super::ff::{
+use byteorder::{BigEndian, ByteOrder};
+use pairing::{
     Field, LegendreSymbol, PrimeField, PrimeFieldDecodingError, PrimeFieldRepr, SqrtField,
 };
-use byteorder::{BigEndian, ByteOrder};
 use rand;
 
 /// Modular exponentiation
@@ -425,7 +425,7 @@ fn ext_euclid(a: u32, b: u32) -> (u32, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::{ext_euclid, modular_pow, Mersenne8};
-    use mock::ff::Field;
+    use pairing::Field;
 
     #[test]
     fn ext_euclid_simple() {

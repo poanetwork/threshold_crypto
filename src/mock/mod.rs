@@ -1,11 +1,9 @@
-extern crate ff;
-
 pub mod ms8;
 
 use std::{fmt, mem, slice};
 
-use self::ff::{Field, PrimeField, ScalarEngine};
 use pairing::{EncodedPoint, GroupDecodingError};
+use pairing::{Field, PrimeField};
 use rand;
 
 use super::{CurveAffine, CurveProjective, Engine};
@@ -70,6 +68,9 @@ impl Engine for Mocktography {
     type Fqe = Mersenne8;
     type Fqk = Mersenne8;
 
+    // In newer versions of pairing, this must be moved to `ScalarEngine`:
+    type Fr = Mersenne8;
+
     fn miller_loop<'a, I>(_i: I) -> Self::Fqk
     where
         I: IntoIterator<
@@ -95,10 +96,6 @@ impl Engine for Mocktography {
     {
         p.into().0 * q.into().0
     }
-}
-
-impl ScalarEngine for Mocktography {
-    type Fr = Mersenne8;
 }
 
 impl AsRef<[u64]> for Mersenne8 {
