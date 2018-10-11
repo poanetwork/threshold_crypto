@@ -303,14 +303,14 @@ impl PrimeField for Mersenne8 {
 
     #[inline]
     fn root_of_unity() -> Self {
-        // Still unclaer what's supposed to be implemented here, missing at least an `n`?.
+        // Still unclear what's supposed to be implemented here, missing at least an `n`?.
         unimplemented!()
     }
 }
 
 impl SqrtField for Mersenne8 {
     fn legendre(&self) -> LegendreSymbol {
-        // Uses Euler's criteria: `(a/p) === a^((p-1)/2).
+        // Uses Euler's criterion: `(a/p) === a^((p-1)/2).
         let exp = (MS8 - 1) / 2;
 
         match (*self).pow(exp).0 {
