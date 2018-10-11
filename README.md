@@ -108,7 +108,7 @@ We use the [`criterion`](https://crates.io/crates/criterion) benchmarking librar
 
 ### Mock cryptography
 
-To speed up automatic tests of crates depending on `threshold_crypto`, the `use-insecure-test-only-mock-crypto` feature is available. **Activating this feature will effectively disable encryption and should only be used during tests!**. Essentially, the underlying elliptic curves will be replaced by small finite fields, yielding a 10-200X speed-up in execution. The resulting ciphers will be very easy to bruteforce, due to their small key space.
+To speed up automatic tests of crates depending on `threshold_crypto`, the `use-insecure-test-only-mock-crypto` feature is available. **Activating this feature will effectively disable encryption and should only be used during tests!**. Essentially, the underlying elliptic curves will be replaced by small finite fields, yielding a 10-200X speed-up in execution. The resulting ciphers can be trivially broken in a number of ways and should never be used in production.
 
 ## License
 
