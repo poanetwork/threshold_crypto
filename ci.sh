@@ -10,6 +10,8 @@ export RUSTFLAGS="-D warnings -C target-cpu=native"
 cargo clippy --tests --examples --benches -- --deny clippy
 cargo clippy --all-features --tests --examples --benches -- --deny clippy
 cargo fmt -- --check
+cargo test
+cargo test --all-features
 cargo test --release
 cargo test --all-features --release
 cargo doc
