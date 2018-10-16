@@ -14,3 +14,4 @@ cargo test --release
 cargo test --all-features --release
 cargo doc
 cargo deadlinks --dir target/doc/threshold_crypto/
+cargo audit
