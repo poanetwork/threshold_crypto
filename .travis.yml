@@ -11,4 +11,5 @@ addons:
 before_install:
   - rustup component add --toolchain=${TRAVIS_RUST_VERSION} rustfmt-preview clippy-preview
   - cargo deadlinks --version || cargo install cargo-deadlinks
+  - cargo audit --version || cargo install cargo-audit
 script: ./ci.sh
