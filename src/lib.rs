@@ -462,7 +462,7 @@ impl PublicKeySet {
         T: IntoFr,
     {
         let samples = shares.into_iter().map(|(i, share)| (i, &(share.0).0));
-        Ok(Signature(interpolate(self.commit.degree() + 1, samples)?))
+        Ok(Signature(interpolate(self.commit.degree(), samples)?))
     }
 
     /// Combines the shares to decrypt the ciphertext.
@@ -472,7 +472,7 @@ impl PublicKeySet {
         T: IntoFr,
     {
         let samples = shares.into_iter().map(|(i, share)| (i, &share.0));
-        let g = interpolate(self.commit.degree() + 1, samples)?;
+        let g = interpolate(self.commit.degree(), samples)?;
         Ok(xor_with_hash(g, &ct.1))
     }
 }
@@ -571,37 +571,42 @@ fn xor_with_hash(g1: G1, bytes: &[u8]) -> Vec<u8> {
     rng.gen_iter().zip(bytes).map(xor).collect()
 }
 
-/// Given a list of `t` samples `(i - 1, f(i) * g)` for a polynomial `f` of degree `t - 1`, and a
+use std::borrow::Borrow;
+
+/// Given a list of `t + 1` samples `(i - 1, f(i) * g)` for a polynomial `f` of degree `t`, and a
 /// group generator `g`, returns `f(0) * g`.
-fn interpolate<'a, C, T, I>(t: usize, items: I) -> Result<C>
+fn interpolate<C, B, T, I>(t: usize, items: I) -> Result<C>
 where
     C: CurveProjective<Scalar = Fr>,
-    I: IntoIterator<Item = (T, &'a C)>,
+    I: IntoIterator<Item = (T, B)>,
     T: IntoFr,
+    B: Borrow<C>,
 {
     let samples: Vec<_> = items
         .into_iter()
-        .take(t)
+        .take(t + 1)
         .map(|(i, sample)| (into_fr_plus_1(i), sample))
         .collect();
-    if samples.len() < t {
+    if samples.len() <= t {
         return Err(Error::NotEnoughShares);
+    }
+
+    if t == 0 {
+        return Ok(*samples[0].1.borrow());
     }
 
     // Compute the products `x_prod[i]` of all but the `i`-th entry.
     let mut x_prod: Vec<C::Scalar> = Vec::with_capacity(t);
     let mut tmp = C::Scalar::one();
     x_prod.push(tmp);
-    for (x, _) in samples.iter().take(t - 1) {
+    for (x, _) in samples.iter().take(t) {
         tmp.mul_assign(x);
         x_prod.push(tmp);
     }
     tmp = C::Scalar::one();
-    let mut i = t - 2;
-    for (x, _) in samples[1..].iter().rev() {
+    for (i, (x, _)) in samples[1..].iter().enumerate().rev() {
         tmp.mul_assign(x);
         x_prod[i].mul_assign(&tmp);
-        i -= 1;
     }
 
     let mut result = C::zero();
@@ -615,7 +620,7 @@ where
             denom.mul_assign(&diff);
         }
         l0.mul_assign(&denom.inverse().ok_or(Error::DuplicateEntry)?);
-        result.add_assign(&sample.into_affine().mul(l0));
+        result.add_assign(&sample.borrow().into_affine().mul(l0));
     }
     Ok(result)
 }
@@ -632,7 +637,24 @@ mod tests {
 
     use std::collections::BTreeMap;
 
-    use rand::{self, random};
+    use rand::{self, random, Rng};
+
+    #[test]
+    fn test_interpolate() {
+        let mut rng = rand::thread_rng();
+        for deg in 0..5 {
+            println!("deg = {}", deg);
+            let comm = Poly::random(deg, &mut rng).commitment();
+            let mut values = Vec::new();
+            let mut x = 0;
+            for _ in 0..=deg {
+                x += rng.gen_range(1, 5);
+                values.push((x - 1, comm.evaluate(x)));
+            }
+            let actual = interpolate(deg, values).expect("wrong number of values");
+            assert_eq!(comm.evaluate(0), actual);
+        }
+    }
 
     #[test]
     fn test_simple_sig() {
