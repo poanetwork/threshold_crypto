@@ -87,7 +87,7 @@ impl Hash for PublicKey {
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
-        f.debug_tuple("PublicKey").field(&HexFmt(uncomp)).finish()
+        write!(f, "PublicKey({:0.10})", HexFmt(uncomp))
     }
 }
 
@@ -135,9 +135,7 @@ pub struct PublicKeyShare(PublicKey);
 impl fmt::Debug for PublicKeyShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
-        f.debug_tuple("PublicKeyShare")
-            .field(&HexFmt(uncomp))
-            .finish()
+        write!(f, "PublicKeyShare({:0.10})", HexFmt(uncomp))
     }
 }
 
@@ -173,7 +171,7 @@ pub struct Signature(#[serde(with = "serde_impl::projective")] G2);
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
-        f.debug_tuple("Signature").field(&HexFmt(uncomp)).finish()
+        write!(f, "Signature({:0.10})", HexFmt(uncomp))
     }
 }
 
@@ -188,7 +186,7 @@ impl Signature {
         let uncomp = self.0.into_affine().into_uncompressed();
         let xor_bytes: u8 = uncomp.as_ref().iter().fold(0, |result, byte| result ^ byte);
         let parity = 0 != xor_bytes.count_ones() % 2;
-        debug!("Signature: {}, parity: {}", HexFmt(uncomp), parity);
+        debug!("Signature: {:0.10}, parity: {}", HexFmt(uncomp), parity);
         parity
     }
 }
@@ -201,9 +199,7 @@ pub struct SignatureShare(pub Signature);
 impl fmt::Debug for SignatureShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
-        f.debug_tuple("SignatureShare")
-            .field(&HexFmt(uncomp))
-            .finish()
+        write!(f, "SignatureShare({:0.10})", HexFmt(uncomp))
     }
 }
 
@@ -317,7 +313,7 @@ impl SecretKey {
     /// field element.
     pub fn reveal(&self) -> String {
         let uncomp = self.public_key().0.into_affine().into_uncompressed();
-        format!("SecretKey({})", HexFmt(uncomp))
+        format!("SecretKey({:0.10})", HexFmt(uncomp))
     }
 }
 
@@ -376,7 +372,7 @@ impl SecretKeyShare {
     /// field element.
     pub fn reveal(&self) -> String {
         let uncomp = self.0.public_key().0.into_affine().into_uncompressed();
-        format!("SecretKeyShare({})", HexFmt(uncomp))
+        format!("SecretKeyShare({:0.10})", HexFmt(uncomp))
     }
 }
 
