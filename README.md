@@ -19,7 +19,7 @@ decrypted and authenticated only with cooperation from at least `threshold +
 ```toml
 [dependencies]
 rand = "0.4"
-threshold_crypto = { version = "0.1", git = "https://github.com/poanetwork/threshold_crypto" }
+threshold_crypto = { version = "0.2", git = "https://github.com/poanetwork/threshold_crypto" }
 ```
 
 `main.rs`:
