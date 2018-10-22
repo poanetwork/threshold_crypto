@@ -98,6 +98,8 @@ impl PublicKey {
     }
 
     /// Returns `true` if the signature matches the message.
+    ///
+    /// This is equivalent to `verify_g2(sig, hash_g2(msg))`.
     pub fn verify<M: AsRef<[u8]>>(&self, sig: &Signature, msg: M) -> bool {
         self.verify_g2(sig, hash_g2(msg))
     }
@@ -146,6 +148,8 @@ impl PublicKeyShare {
     }
 
     /// Returns `true` if the signature matches the message.
+    ///
+    /// This is equivalent to `verify_g2(sig, hash_g2(msg))`.
     pub fn verify<M: AsRef<[u8]>>(&self, sig: &SignatureShare, msg: M) -> bool {
         self.verify_g2(sig, hash_g2(msg))
     }
@@ -294,6 +298,8 @@ impl SecretKey {
     }
 
     /// Signs the given message.
+    ///
+    /// This is equivalent to `sign_g2(hash_g2(msg))`.
     pub fn sign<M: AsRef<[u8]>>(&self, msg: M) -> Signature {
         self.sign_g2(hash_g2(msg))
     }
@@ -534,7 +540,7 @@ impl SecretKeySet {
 }
 
 /// Returns a hash of the given message in `G2`.
-fn hash_g2<M: AsRef<[u8]>>(msg: M) -> G2 {
+pub fn hash_g2<M: AsRef<[u8]>>(msg: M) -> G2 {
     let digest = sha3_256(msg.as_ref());
     let seed = <[u32; CHACHA_RNG_SEED_SIZE]>::init_with_indices(|i| {
         BigEndian::read_u32(&digest.as_ref()[(4 * i)..(4 * i + 4)])
