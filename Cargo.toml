@@ -18,26 +18,26 @@ repository = "https://github.com/poanetwork/threshold_crypto"
 description = "Pairing threshold cryptography"
 
 [dependencies]
-byteorder = "1.2.3"
+byteorder = "1.2.7"
 errno = "0.2.4"
-failure = "0.1"
-hex_fmt = "0.2"
+failure = "0.1.3"
+hex_fmt = "0.2.0"
 init_with = "1.1.0"
 lazy_static = "1.1.0"
-log = "0.4.1"
+log = "0.4.5"
 memsec = "0.5.4"
 pairing = { version = "0.14.2", features = ["u128-support"] }
-rand = "0.4.2"
+rand = "0.4.3"
 rand_derive = "0.3.1"
-serde = "1.0.55"
-serde_derive = "1.0.55"
-tiny-keccak = "1.4"
+serde = "1.0.80"
+serde_derive = "1.0.80"
+tiny-keccak = "1.4.2"
 
 [dev-dependencies]
-bincode = "1.0.0"
-criterion = "0.2"
-rand = "0.4.2"
-serde_derive = "1.0.55"
+bincode = "1.0.1"
+criterion = "0.2.5"
+rand = "0.4.3"
+serde_derive = "1.0.80"
 
 [[bench]]
 name = "bench"
