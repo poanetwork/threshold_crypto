@@ -7,8 +7,8 @@ export RUST_BACKTRACE=1
 # Enables additional cpu-specific optimizations.
 export RUSTFLAGS="-D warnings -C target-cpu=native"
 
-cargo clippy --tests --examples --benches -- --deny clippy
-cargo clippy --all-features --tests --examples --benches -- --deny clippy
+cargo clippy --tests --examples --benches -- --deny clippy::all
+cargo clippy --all-features --tests --examples --benches -- --deny clippy::all
 cargo fmt -- --check
 cargo test
 cargo test --all-features
