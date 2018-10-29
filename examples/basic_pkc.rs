@@ -1,9 +1,9 @@
 extern crate bincode;
-#[macro_use]
 extern crate serde_derive;
 extern crate threshold_crypto;
 
 use bincode::{deserialize, serialize};
+use serde_derive::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, SecretKey, Signature};
 
 #[derive(Deserialize, Serialize)]

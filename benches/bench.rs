@@ -1,10 +1,9 @@
-#[macro_use]
 extern crate criterion;
 extern crate pairing;
 extern crate rand;
 extern crate threshold_crypto;
 
-use criterion::Criterion;
+use criterion::{criterion_group, criterion_main, Criterion};
 use threshold_crypto::poly::Poly;
 use threshold_crypto::Fr;
 

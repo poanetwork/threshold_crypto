@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use super::G1;
 use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_derive::{Deserialize, Serialize};
 
 use poly::{coeff_pos, BivarCommitment};
 
@@ -200,6 +201,7 @@ mod tests {
     use bincode;
     use pairing::Engine;
     use rand::{self, Rng};
+    use serde_derive::{Deserialize, Serialize};
 
     use poly::BivarPoly;
 

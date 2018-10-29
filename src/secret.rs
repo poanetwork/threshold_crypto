@@ -4,7 +4,9 @@
 use std::mem::{size_of, size_of_val};
 use std::ops::{Deref, DerefMut};
 
+use lazy_static::lazy_static;
 use memsec::memzero;
+
 use Fr;
 
 lazy_static! {

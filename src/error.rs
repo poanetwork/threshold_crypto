@@ -1,5 +1,7 @@
 //! Crypto errors.
 
+use failure::Fail;
+
 /// A crypto error.
 #[derive(Clone, Eq, PartialEq, Debug, Fail)]
 pub enum Error {
