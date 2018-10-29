@@ -15,20 +15,15 @@
 extern crate bincode;
 extern crate byteorder;
 extern crate errno;
-#[macro_use]
 extern crate failure;
 extern crate hex_fmt;
 extern crate init_with;
-#[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate log;
 extern crate memsec;
 extern crate rand;
-#[macro_use]
 extern crate rand_derive;
 extern crate serde;
-#[macro_use]
 extern crate serde_derive;
 extern crate tiny_keccak;
 
@@ -48,14 +43,17 @@ use std::ptr::copy_nonoverlapping;
 use byteorder::{BigEndian, ByteOrder};
 use hex_fmt::HexFmt;
 use init_with::InitWith;
+use log::debug;
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
+use rand_derive::Rand;
 use tiny_keccak::sha3_256;
 
 use error::{Error, Result};
 use into_fr::IntoFr;
 use poly::{Commitment, Poly};
 use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
+use serde_derive::{Deserialize, Serialize};
 
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};

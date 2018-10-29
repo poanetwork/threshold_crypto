@@ -22,13 +22,14 @@ use std::hash::{Hash, Hasher};
 use std::mem::size_of_val;
 use std::{cmp, iter, ops};
 
-use super::{Fr, G1Affine, G1};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
+use serde_derive::{Deserialize, Serialize};
 
 use error::{Error, Result};
 use into_fr::IntoFr;
 use secret::{clear_fr, ContainsSecret, MemRange, Safe};
+use {Fr, G1Affine, G1};
 
 /// A univariate polynomial in the prime field.
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
