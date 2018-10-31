@@ -12,6 +12,10 @@ signature shares are distributed to network participants. A message can be
 decrypted and authenticated only with cooperation from at least `threshold +
 1` nodes.
 
+## Security Audit
+
+An [official security audit](SECURITY_AUDIT.md) has been completed on `threshold_crypto` by [Jean-Philippe Aumasson](https://aumasson.jp/). No exploitable security issues were found, and potential improvements have been addressed. 
+
 ## Usage
 
 `Cargo.toml`:
@@ -94,6 +98,11 @@ A major application for this library is within a distributed network that
 must tolerate up to `t` adversarial (malicious or faulty) nodes. Because `t +
 1` nodes are required to sign or reveal information, messages can be trusted
 by third-parties as representing the consensus of the network.
+
+### Documentation
+
+* [crate documentation](https://docs.rs/threshold_crypto/)
+* [crates.io package](https://crates.io/crates/threshold_crypto) 
 
 ## Performance
 
