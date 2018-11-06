@@ -14,7 +14,7 @@ decrypted and authenticated only with cooperation from at least `threshold +
 
 ## Security Audit
 
-An [official security audit](SECURITY_AUDIT.md) has been completed on `threshold_crypto` by [Jean-Philippe Aumasson](https://aumasson.jp/). No exploitable security issues were found, and potential improvements have been addressed. 
+An [official security audit](https://github.com/poanetwork/wiki/wiki/Threshold-Crypto-Audit) has been completed on `threshold_crypto` by [Jean-Philippe Aumasson](https://aumasson.jp/). No exploitable security issues were found, and potential improvements have been addressed. Outdated dependencies mentioned in the audit were updated in https://github.com/poanetwork/threshold_crypto/commit/54026f5fe7e0b5a52e446ac01a50469da1f15a71 with the exception of rand, which is currently pinned to version 0.4 (see https://github.com/poanetwork/hbbft/issues/145 for details).
 
 ## Usage
 
@@ -52,7 +52,7 @@ fn main() {
 
 ### Testing
 
-Run tests using the following command:
+Run tests with:
 
 ```
 $ cargo test
@@ -117,7 +117,7 @@ We use the [`criterion`](https://crates.io/crates/criterion) benchmarking librar
 
 ### Mock cryptography
 
-To speed up automatic tests of crates depending on `threshold_crypto`, the `use-insecure-test-only-mock-crypto` feature is available. **Activating this feature will effectively disable encryption and should only be used during tests!**. Essentially, the underlying elliptic curves will be replaced by small finite fields, yielding a 10-200X speed-up in execution. The resulting ciphers can be trivially broken in a number of ways and should never be used in production.
+To speed up automatic tests of crates depending on `threshold_crypto`, the `use-insecure-test-only-mock-crypto` feature is available. **Activating this feature will effectively disable encryption and should only be used during tests!** Essentially, the underlying elliptic curves will be replaced by small finite fields, yielding a 10-200X speed-up in execution. The resulting ciphers can be trivially broken in a number of ways and should never be used in production.
 
 ## License
 
