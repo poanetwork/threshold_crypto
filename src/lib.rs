@@ -29,6 +29,7 @@ extern crate tiny_keccak;
 
 pub extern crate pairing;
 
+mod bit_iterator;
 mod into_fr;
 mod secret;
 
@@ -44,6 +45,7 @@ use byteorder::{BigEndian, ByteOrder};
 use hex_fmt::HexFmt;
 use init_with::InitWith;
 use log::debug;
+
 use pairing::{CurveAffine, CurveProjective, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
 use rand_derive::Rand;
@@ -55,8 +57,9 @@ use poly::{Commitment, Poly};
 use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
 use serde_derive::{Deserialize, Serialize};
 
+pub use bit_iterator::BitIterator;
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
-pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};
+pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G2Compressed, G1, G2};
 
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
 mod mock;
@@ -184,12 +187,18 @@ impl Hash for Signature {
 }
 
 impl Signature {
+    /// Computes the parity of the signature.
     pub fn parity(&self) -> bool {
         let uncomp = self.0.into_affine().into_uncompressed();
         let xor_bytes: u8 = uncomp.as_ref().iter().fold(0, |result, byte| result ^ byte);
         let parity = 0 != xor_bytes.count_ones() % 2;
         debug!("Signature: {:0.10}, parity: {}", HexFmt(uncomp), parity);
         parity
+    }
+
+    /// Constructs an iterator over the bits of the signature.
+    pub fn bit_iter(&self) -> BitIterator<G2Compressed> {
+        BitIterator::new(self.0.into_affine().into_compressed())
     }
 }
 
