@@ -29,6 +29,9 @@ pub struct Mocktography;
 #[derive(Copy, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Ms8Affine(Mersenne8);
 
+/// Alias for the compressed representation.
+pub type Ms8Compressed = Ms8Affine;
+
 /// Projective type for `Mersenne8`.
 #[derive(Copy, Clone, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Ms8Projective(Mersenne8);
@@ -200,6 +203,10 @@ impl CurveAffine for Ms8Affine {
 
     fn into_projective(&self) -> Self::Projective {
         Ms8Projective(self.0)
+    }
+
+    fn into_compressed(&self) -> Self::Compressed {
+        *self
     }
 }
 

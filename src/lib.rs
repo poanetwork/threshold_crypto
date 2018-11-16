@@ -67,7 +67,7 @@ mod mock;
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
 pub use mock::{
     Mersenne8 as Fr, Mocktography as PEngine, Ms8Affine as G1Affine, Ms8Affine as G2Affine,
-    Ms8Projective as G1, Ms8Projective as G2,
+    Ms8Compressed as G2Compressed, Ms8Projective as G1, Ms8Projective as G2,
 };
 
 /// The number of words (`u32`) in a ChaCha RNG seed.
