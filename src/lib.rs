@@ -850,4 +850,34 @@ mod tests {
         let deser_sig = bincode::deserialize(&ser_sig).expect("deserialize signature");
         assert_eq!(sig, deser_sig);
     }
+
+    /// Tests of random bit distribution within signatures using `BitIterator`.
+    #[test]
+    fn test_signature_bit_iterator() {
+        let sk: SecretKey = random();
+        let msg0 = b"Tenant signature: ______";
+        let sig0 = sk.sign(msg0);
+        let bits0 = sig0.bit_iter();
+        let msg1 = b"Landlord signature: ______";
+        let sig1 = sk.sign(msg1);
+        let bits1 = sig1.bit_iter();
+        let msg2 = b"Agent signature: ______";
+        let sig2 = sk.sign(msg2);
+        let bits2 = sig2.bit_iter();
+        let mut count: usize = 0;
+        let mut count_any = 0;
+        let mut count_all = 0;
+        for (b0, (b1, b2)) in bits0.zip(bits1.zip(bits2)) {
+            count += 1;
+            if b0 || b1 || b2 {
+                count_any += 1;
+            }
+            if b0 && b1 && b2 {
+                count_all += 1;
+            }
+        }
+        assert!(count > 0);
+        assert!(count_any >= count / 3);
+        assert!(count_all < count / 3);
+    }
 }
