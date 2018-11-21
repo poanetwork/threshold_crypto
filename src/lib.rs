@@ -44,28 +44,36 @@ use byteorder::{BigEndian, ByteOrder};
 use hex_fmt::HexFmt;
 use init_with::InitWith;
 use log::debug;
-use pairing::{CurveAffine, CurveProjective, Engine, Field};
+use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
 use rand_derive::Rand;
 use tiny_keccak::sha3_256;
 
-use error::{Error, Result};
+use error::{Error, FromBytesError, FromBytesResult, Result};
 use into_fr::IntoFr;
 use poly::{Commitment, Poly};
 use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
 use serde_derive::{Deserialize, Serialize};
 
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
-pub use pairing::bls12_381::{Bls12 as PEngine, Fr, G1Affine, G2Affine, G1, G2};
+pub use pairing::bls12_381::{Bls12 as PEngine, Fr, FrRepr, G1Affine, G2Affine, G1, G2};
 
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
 mod mock;
 
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
 pub use mock::{
-    Mersenne8 as Fr, Mocktography as PEngine, Ms8Affine as G1Affine, Ms8Affine as G2Affine,
-    Ms8Projective as G1, Ms8Projective as G2,
+    Mersenne8 as Fr, Mersenne8 as FrRepr, Mocktography as PEngine, Ms8Affine as G1Affine,
+    Ms8Affine as G2Affine, Ms8Projective as G1, Ms8Projective as G2, PK_SIZE, SIG_SIZE,
 };
+
+/// The size of a key's representation in bytes.
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+pub const PK_SIZE: usize = 48;
+
+/// The size of a signature's representation in bytes.
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+pub const SIG_SIZE: usize = 96;
 
 /// The number of words (`u32`) in a ChaCha RNG seed.
 const CHACHA_RNG_SEED_SIZE: usize = 8;
@@ -122,9 +130,20 @@ impl PublicKey {
         Ciphertext(u, v, w)
     }
 
+    /// Returns the key with the given representation, if valid.
+    pub fn from_bytes<B: Borrow<[u8; PK_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
+        let mut compressed: <G1Affine as CurveAffine>::Compressed = EncodedPoint::empty();
+        compressed.as_mut().copy_from_slice(bytes.borrow());
+        let opt_affine = compressed.into_affine().ok();
+        let projective = opt_affine.ok_or(FromBytesError::Invalid)?.into_projective();
+        Ok(PublicKey(projective))
+    }
+
     /// Returns a byte string representation of the public key.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.0.into_affine().into_compressed().as_ref().to_vec()
+    pub fn to_bytes(&self) -> [u8; PK_SIZE] {
+        let mut bytes = [0u8; PK_SIZE];
+        bytes.copy_from_slice(self.0.into_affine().into_compressed().as_ref());
+        bytes
     }
 }
 
@@ -159,8 +178,13 @@ impl PublicKeyShare {
         PEngine::pairing(share.0, hash) == PEngine::pairing((self.0).0, *w)
     }
 
+    /// Returns the key share with the given representation, if valid.
+    pub fn from_bytes<B: Borrow<[u8; PK_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
+        Ok(PublicKeyShare(PublicKey::from_bytes(bytes)?))
+    }
+
     /// Returns a byte string representation of the public key share.
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> [u8; PK_SIZE] {
         self.0.to_bytes()
     }
 }
@@ -191,6 +215,22 @@ impl Signature {
         debug!("Signature: {:0.10}, parity: {}", HexFmt(uncomp), parity);
         parity
     }
+
+    /// Returns the signature with the given representation, if valid.
+    pub fn from_bytes<B: Borrow<[u8; SIG_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
+        let mut compressed: <G2Affine as CurveAffine>::Compressed = EncodedPoint::empty();
+        compressed.as_mut().copy_from_slice(bytes.borrow());
+        let opt_affine = compressed.into_affine().ok();
+        let projective = opt_affine.ok_or(FromBytesError::Invalid)?.into_projective();
+        Ok(Signature(projective))
+    }
+
+    /// Returns a byte string representation of the signature.
+    pub fn to_bytes(&self) -> [u8; SIG_SIZE] {
+        let mut bytes = [0u8; SIG_SIZE];
+        bytes.copy_from_slice(self.0.into_affine().into_compressed().as_ref());
+        bytes
+    }
 }
 
 /// A signature share.
@@ -202,6 +242,18 @@ impl fmt::Debug for SignatureShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
         write!(f, "SignatureShare({:0.10})", HexFmt(uncomp))
+    }
+}
+
+impl SignatureShare {
+    /// Returns the signature share with the given representation, if valid.
+    pub fn from_bytes<B: Borrow<[u8; SIG_SIZE]>>(bytes: B) -> FromBytesResult<Self> {
+        Ok(SignatureShare(Signature::from_bytes(bytes)?))
+    }
+
+    /// Returns a byte string representation of the signature share.
+    pub fn to_bytes(&self) -> [u8; SIG_SIZE] {
+        self.0.to_bytes()
     }
 }
 
@@ -828,6 +880,17 @@ mod tests {
     }
 
     #[test]
+    fn test_from_to_bytes() {
+        let sk: SecretKey = random();
+        let sig = sk.sign("Please sign here: ______");
+        let pk = sk.public_key();
+        let pk2 = PublicKey::from_bytes(pk.to_bytes()).expect("invalid pk representation");
+        assert_eq!(pk, pk2);
+        let sig2 = Signature::from_bytes(sig.to_bytes()).expect("invalid sig representation");
+        assert_eq!(sig, sig2);
+    }
+
+    #[test]
     fn test_serde() {
         use bincode;
 
@@ -836,9 +899,17 @@ mod tests {
         let pk = sk.public_key();
         let ser_pk = bincode::serialize(&pk).expect("serialize public key");
         let deser_pk = bincode::deserialize(&ser_pk).expect("deserialize public key");
+        assert_eq!(ser_pk.len(), PK_SIZE);
         assert_eq!(pk, deser_pk);
         let ser_sig = bincode::serialize(&sig).expect("serialize signature");
         let deser_sig = bincode::deserialize(&ser_sig).expect("deserialize signature");
+        assert_eq!(ser_sig.len(), SIG_SIZE);
         assert_eq!(sig, deser_sig);
+    }
+
+    #[test]
+    fn test_size() {
+        assert_eq!(<G1Affine as CurveAffine>::Compressed::size(), PK_SIZE);
+        assert_eq!(<G2Affine as CurveAffine>::Compressed::size(), SIG_SIZE);
     }
 }

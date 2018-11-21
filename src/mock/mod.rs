@@ -21,6 +21,11 @@ use super::{CurveAffine, CurveProjective, Engine};
 
 pub use self::ms8::Mersenne8;
 
+/// The size of a key's representation in bytes.
+pub const PK_SIZE: usize = 4;
+/// The size of a signature's representation in bytes.
+pub const SIG_SIZE: usize = 4;
+
 /// A `pairing` Engine based on `Mersenne8` prime fields.
 #[derive(Clone, Debug)]
 pub struct Mocktography;
@@ -292,7 +297,7 @@ mod test {
     // There are copy & pasted results of calculations from external programs in these tests.
     #![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
 
-    use super::{Mersenne8, Mocktography, Ms8Affine};
+    use super::{EncodedPoint, Mersenne8, Mocktography, Ms8Affine, PK_SIZE, SIG_SIZE};
     use Engine;
 
     #[test]
@@ -318,5 +323,11 @@ mod test {
             println!("Checking e({}, {}) = {}", q, p, res);
             assert_eq!(Mocktography::pairing(q, p), Mersenne8::new(res));
         }
+    }
+
+    #[test]
+    fn size() {
+        assert_eq!(<Ms8Affine as EncodedPoint>::size(), PK_SIZE);
+        assert_eq!(<Ms8Affine as EncodedPoint>::size(), SIG_SIZE);
     }
 }
