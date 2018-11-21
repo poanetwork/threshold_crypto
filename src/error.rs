@@ -28,3 +28,13 @@ mod tests {
         is_send_and_sync(Error::NotEnoughShares);
     }
 }
+
+/// An error reading a structure from an array of bytes.
+#[derive(Clone, Eq, PartialEq, Debug, Fail)]
+pub enum FromBytesError {
+    #[fail(display = "Invalid representation.")]
+    Invalid,
+}
+
+/// The result of attempting to read a structure from an array of bytes.
+pub type FromBytesResult<T> = ::std::result::Result<T, FromBytesError>;
