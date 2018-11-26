@@ -5,10 +5,13 @@ use failure::Fail;
 /// A crypto error.
 #[derive(Clone, Eq, PartialEq, Debug, Fail)]
 pub enum Error {
+    /// Not enough signature shares.
     #[fail(display = "Not enough signature shares")]
     NotEnoughShares,
+    /// Signature shares contain a duplicated index.
     #[fail(display = "Signature shares contain a duplicated index")]
     DuplicateEntry,
+    /// The degree is too high for the coefficients to be indexed by `usize`.
     #[fail(display = "The degree is too high for the coefficients to be indexed by usize.")]
     DegreeTooHigh,
 }
@@ -32,6 +35,7 @@ mod tests {
 /// An error reading a structure from an array of bytes.
 #[derive(Clone, Eq, PartialEq, Debug, Fail)]
 pub enum FromBytesError {
+    /// Invalid representation
     #[fail(display = "Invalid representation.")]
     Invalid,
 }

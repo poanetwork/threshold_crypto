@@ -1,3 +1,5 @@
+//! A pairing-based threshold cryptosystem for collaborative decryption and signatures.
+
 // Clippy warns that it's dangerous to derive `PartialEq` and explicitly implement `Hash`, but the
 // `pairing::bls12_381` types don't implement `Hash`, so we can't derive it.
 #![cfg_attr(feature = "cargo-clippy", allow(derive_hash_xor_eq))]
@@ -10,6 +12,7 @@
     ),
     allow(trivially_copy_pass_by_ref)
 )]
+#![warn(missing_docs)]
 
 #[cfg(test)]
 extern crate bincode;
@@ -31,10 +34,10 @@ pub extern crate pairing;
 
 mod into_fr;
 mod secret;
+mod serde_impl;
 
 pub mod error;
 pub mod poly;
-pub mod serde_impl;
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -208,6 +211,7 @@ impl Hash for Signature {
 }
 
 impl Signature {
+    /// Returns `true` if the signature contains an odd number of ones.
     pub fn parity(&self) -> bool {
         let uncomp = self.0.into_affine().into_uncompressed();
         let xor_bytes: u8 = uncomp.as_ref().iter().fold(0, |result, byte| result ^ byte);

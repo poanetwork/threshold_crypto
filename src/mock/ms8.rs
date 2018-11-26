@@ -147,10 +147,12 @@ generate_op_impls!(Mersenne8, Mul, MulAssign, mul, mul_assign);
 
 impl Mersenne8 {
     #[inline]
+    /// Creates a new `Mersenne8`, with the value `v` modulo `MS8`.
     pub fn new(v: u32) -> Mersenne8 {
         Mersenne8(v % MS8)
     }
 
+    /// Takes `self` to the power of `exp`.
     #[inline]
     pub fn pow(self, exp: u32) -> Mersenne8 {
         Mersenne8(modular_pow(self.0, exp, MS8))
