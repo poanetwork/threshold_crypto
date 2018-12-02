@@ -487,6 +487,7 @@ impl SecretKey {
     /// Generates a non-redacted debug string. This method differs from
     /// the `Debug` implementation in that it *does* leak the secret prime
     /// field element.
+    #[cfg(debug_assertions)]
     pub fn reveal(&self) -> String {
         let uncomp = self.public_key().0.into_affine().into_uncompressed();
         let bytes = uncomp.as_ref();
@@ -580,6 +581,7 @@ impl SecretKeyShare {
     /// Generates a non-redacted debug string. This method differs from
     /// the `Debug` implementation in that it *does* leak the secret prime
     /// field element.
+    #[cfg(debug_assertions)]
     pub fn reveal(&self) -> String {
         let uncomp = self.0.public_key().0.into_affine().into_uncompressed();
         let bytes = uncomp.as_ref();
