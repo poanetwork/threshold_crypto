@@ -1,6 +1,3 @@
-extern crate rand;
-extern crate threshold_crypto;
-
 use std::collections::BTreeMap;
 
 use threshold_crypto::{
@@ -53,7 +50,8 @@ impl ChatNetwork {
                 let sk_share = sk_set.secret_key_share(id);
                 let pk_share = pk_set.public_key_share(id);
                 Node::new(id, sk_share, pk_share)
-            }).collect();
+            })
+            .collect();
 
         ChatNetwork {
             pk_set,
@@ -98,8 +96,7 @@ impl ChatNetwork {
                 .iter()
                 .fold(BTreeMap::new(), |mut all_pending, node| {
                     for (user_id, signed_msgs) in &node.pending {
-                        let mut user_msgs =
-                            all_pending.entry(*user_id).or_insert_with(BTreeMap::new);
+                        let user_msgs = all_pending.entry(*user_id).or_insert_with(BTreeMap::new);
                         for (msg, sigs) in signed_msgs.iter() {
                             let sigs = sigs.iter().cloned();
                             user_msgs

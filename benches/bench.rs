@@ -1,8 +1,3 @@
-extern crate criterion;
-extern crate pairing;
-extern crate rand;
-extern crate threshold_crypto;
-
 use criterion::{criterion_group, criterion_main, Criterion};
 use threshold_crypto::poly::Poly;
 use threshold_crypto::Fr;
@@ -79,7 +74,7 @@ mod poly_benches {
         );
     }
 
-    criterion_group!{
+    criterion_group! {
         name = poly_benches;
         config = Criterion::default();
         targets = multiplication, interpolate, addition, subtraction,
@@ -108,7 +103,8 @@ mod public_key_set_benches {
                     .map(|&i| {
                         let sig = sk_set.secret_key_share(i).sign(msg);
                         (i, sig)
-                    }).collect();
+                    })
+                    .collect();
                 b.iter(|| {
                     pk_set
                         .combine_signatures(&sigs)
@@ -119,7 +115,7 @@ mod public_key_set_benches {
         );
     }
 
-    criterion_group!{
+    criterion_group! {
         name = public_key_set_benches;
         config = Criterion::default();
         targets = combine_signatures,

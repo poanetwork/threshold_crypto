@@ -2,33 +2,14 @@
 
 // Clippy warns that it's dangerous to derive `PartialEq` and explicitly implement `Hash`, but the
 // `pairing::bls12_381` types don't implement `Hash`, so we can't derive it.
-#![cfg_attr(feature = "cargo-clippy", allow(derive_hash_xor_eq))]
+#![allow(clippy::derive_hash_xor_eq)]
 // When using the mocktography, the resulting field elements become wrapped `u32`s, suddenly
 // triggering pass-by-reference warnings. They are conditionally disabled for this reason:
 #![cfg_attr(
-    all(
-        feature = "cargo-clippy",
-        feature = "use-insecure-test-only-mock-crypto"
-    ),
-    allow(trivially_copy_pass_by_ref)
+    feature = "use-insecure-test-only-mock-crypto",
+    allow(clippy::trivially_copy_pass_by_ref)
 )]
 #![warn(missing_docs)]
-
-#[cfg(test)]
-extern crate bincode;
-extern crate byteorder;
-extern crate errno;
-extern crate failure;
-extern crate hex_fmt;
-extern crate init_with;
-extern crate lazy_static;
-extern crate log;
-extern crate memsec;
-extern crate rand;
-extern crate rand_derive;
-extern crate serde;
-extern crate serde_derive;
-extern crate tiny_keccak;
 
 pub extern crate pairing;
 
@@ -50,13 +31,13 @@ use log::debug;
 use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field};
 use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
 use rand_derive::Rand;
+use serde_derive::{Deserialize, Serialize};
 use tiny_keccak::sha3_256;
 
-use error::{Error, FromBytesError, FromBytesResult, Result};
-use into_fr::IntoFr;
-use poly::{Commitment, Poly};
-use secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
-use serde_derive::{Deserialize, Serialize};
+use crate::error::{Error, FromBytesError, FromBytesResult, Result};
+use crate::into_fr::IntoFr;
+use crate::poly::{Commitment, Poly};
+use crate::secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
 
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub use pairing::bls12_381::{Bls12 as PEngine, Fr, FrRepr, G1Affine, G2Affine, G1, G2};
@@ -65,7 +46,7 @@ pub use pairing::bls12_381::{Bls12 as PEngine, Fr, FrRepr, G1Affine, G2Affine, G
 mod mock;
 
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
-pub use mock::{
+pub use crate::mock::{
     Mersenne8 as Fr, Mersenne8 as FrRepr, Mocktography as PEngine, Ms8Affine as G1Affine,
     Ms8Affine as G2Affine, Ms8Projective as G1, Ms8Projective as G2, PK_SIZE, SIG_SIZE,
 };
@@ -753,7 +734,8 @@ mod tests {
             .map(|&i| {
                 let sig = sk_set.secret_key_share(i).sign(msg);
                 (i, sig)
-            }).collect();
+            })
+            .collect();
 
         // Each of the shares is a valid signature matching its public key share.
         for (i, sig) in &sigs {
@@ -770,7 +752,8 @@ mod tests {
             .map(|&i| {
                 let sig = sk_set.secret_key_share(i).sign(msg);
                 (i, sig)
-            }).collect();
+            })
+            .collect();
         let sig2 = pk_set.combine_signatures(&sigs2).expect("signatures match");
         assert_eq!(sig, sig2);
     }
@@ -824,7 +807,8 @@ mod tests {
                     .decrypt_share(&ciphertext)
                     .expect("ciphertext is invalid");
                 (i, dec_share)
-            }).collect();
+            })
+            .collect();
 
         // Each of the shares is valid matching its public key share.
         for (i, share) in &shares {
