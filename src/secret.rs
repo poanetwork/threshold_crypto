@@ -7,7 +7,7 @@ use std::ops::{Deref, DerefMut};
 use lazy_static::lazy_static;
 use memsec::memzero;
 
-use Fr;
+use crate::Fr;
 
 lazy_static! {
     /// The size in bytes of a single field element.

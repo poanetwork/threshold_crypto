@@ -1,11 +1,11 @@
 use std::borrow::Cow;
 
+use crate::G1;
 use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
-use G1;
 
-use poly::{coeff_pos, BivarCommitment};
+use crate::poly::{coeff_pos, BivarCommitment};
 
 const ERR_DEG: &str = "commitment degree does not match coefficients";
 
@@ -24,7 +24,8 @@ impl Serialize for BivarCommitment {
         WireBivarCommitment {
             degree: self.degree,
             coeff: Cow::Borrowed(&self.coeff),
-        }.serialize(s)
+        }
+        .serialize(s)
     }
 }
 
@@ -160,7 +161,7 @@ pub mod field_vec {
     use serde::de::Error as DeserializeError;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    use {Fr, FrRepr};
+    use crate::{Fr, FrRepr};
 
     /// A wrapper type to facilitate serialization and deserialization of field elements.
     pub struct FieldWrap<B>(B);
@@ -203,8 +204,8 @@ mod tests {
     use rand::{self, Rng};
     use serde_derive::{Deserialize, Serialize};
 
-    use poly::BivarPoly;
-    use {Fr, G1};
+    use crate::poly::BivarPoly;
+    use crate::{Fr, G1};
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Vecs {

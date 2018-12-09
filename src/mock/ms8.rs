@@ -428,13 +428,13 @@ fn ext_euclid(a: u32, b: u32) -> (u32, i64, i64) {
 #[cfg(test)]
 mod tests {
     // There are copy & pasted results of calculations from external programs in these tests.
-    #![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
-    #![cfg_attr(feature = "cargo-clippy", allow(op_ref))]
+    #![allow(clippy::unreadable_literal)]
+    #![allow(clippy::op_ref)]
     // We test a few mathematical identities, including `c - c = 0`. Clippy complains about these
     // otherwise unusual expressions, so the lint is disabled.
-    #![cfg_attr(feature = "cargo-clippy", allow(eq_op))]
+    #![allow(clippy::eq_op)]
     // Some test functions contain long lists of assertions. Clippy thinks they are too complex.
-    #![cfg_attr(feature = "cargo-clippy", allow(cyclomatic_complexity))]
+    #![allow(clippy::cyclomatic_complexity)]
 
     use super::{ext_euclid, modular_pow, Mersenne8};
     use pairing::Field;

@@ -295,10 +295,10 @@ impl EncodedPoint for Ms8Affine {
 #[cfg(test)]
 mod test {
     // There are copy & pasted results of calculations from external programs in these tests.
-    #![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
+    #![allow(clippy::unreadable_literal)]
 
     use super::{EncodedPoint, Mersenne8, Mocktography, Ms8Affine, PK_SIZE, SIG_SIZE};
-    use Engine;
+    use pairing::Engine;
 
     #[test]
     fn example_pairings() {

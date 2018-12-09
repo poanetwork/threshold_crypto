@@ -26,10 +26,10 @@ use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
 
-use error::{Error, Result};
-use into_fr::IntoFr;
-use secret::{clear_fr, ContainsSecret, MemRange, Safe};
-use {Fr, G1Affine, G1};
+use crate::error::{Error, Result};
+use crate::into_fr::IntoFr;
+use crate::secret::{clear_fr, ContainsSecret, MemRange, Safe};
+use crate::{Fr, G1Affine, G1};
 
 /// A univariate polynomial in the prime field.
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
@@ -53,7 +53,7 @@ impl Debug for Poly {
     }
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(suspicious_op_assign_impl))]
+#[allow(clippy::suspicious_op_assign_impl)]
 impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
     fn add_assign(&mut self, rhs: B) {
         let len = self.coeff.len();
@@ -139,7 +139,7 @@ impl<B: Borrow<Poly>> ops::Sub<B> for Poly {
 }
 
 // Clippy thinks using `+` in a `Sub` implementation is suspicious.
-#[cfg_attr(feature = "cargo-clippy", allow(suspicious_arithmetic_impl))]
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl<'a> ops::Sub<Fr> for Poly {
     type Output = Poly;
 
@@ -158,7 +158,7 @@ impl<'a> ops::Sub<u64> for Poly {
 }
 
 // Clippy thinks using any `+` and `-` in a `Mul` implementation is suspicious.
-#[cfg_attr(feature = "cargo-clippy", allow(suspicious_arithmetic_impl))]
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
     type Output = Poly;
 
@@ -406,7 +406,7 @@ impl Poly {
             // current value at `x`: Adding it to `poly` will then make it correct for `x`.
             let mut diff = *y;
             diff.sub_assign(&poly.evaluate(x));
-            let mut base_val = base.evaluate(x);
+            let base_val = base.evaluate(x);
             diff.mul_assign(&base_val.inverse().expect("sample points must be distinct"));
             base *= diff;
             poly += &base;
@@ -608,7 +608,8 @@ impl BivarPoly {
                     result.add_assign(&summand);
                 }
                 result
-            }).collect();
+            })
+            .collect();
         Poly::from(coeff)
     }
 
@@ -692,7 +693,8 @@ impl BivarCommitment {
                     result.add_assign(&summand);
                 }
                 result
-            }).collect();
+            })
+            .collect();
         Commitment { coeff }
     }
 
@@ -710,7 +712,8 @@ fn powers<T: IntoFr>(into_x: T, degree: usize) -> Vec<Fr> {
         .chain((0..degree).map(|_| {
             x_pow_i.mul_assign(&x);
             x_pow_i
-        })).collect()
+        }))
+        .collect()
 }
 
 /// Returns the position of coefficient `(i, j)` in the vector describing a symmetric bivariate
