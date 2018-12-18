@@ -706,8 +706,8 @@ mod tests {
 
     #[test]
     fn test_simple_sig() {
-        let sk0: SecretKey = random();
-        let sk1: SecretKey = random();
+        let sk0 = SecretKey::random();
+        let sk1 = SecretKey::random();
         let pk0 = sk0.public_key();
         let msg0 = b"Real news";
         let msg1 = b"Fake news";
