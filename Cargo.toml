@@ -28,7 +28,7 @@ log = "0.4.5"
 memsec = "0.5.4"
 pairing = { version = "0.14.2", features = ["u128-support"] }
 rand = "0.6.1"
-rand04_compat = { git = "https://github.com/poanetwork/rand04_compat" }
+rand04_compat = "0.1.0"
 rand_chacha = "0.1.0"
 serde = "1.0.80"
 serde_derive = "1.0.80"
