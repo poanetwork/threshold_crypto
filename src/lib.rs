@@ -15,10 +15,10 @@ pub extern crate pairing;
 
 mod into_fr;
 mod secret;
-mod serde_impl;
 
 pub mod error;
 pub mod poly;
+pub mod serde_impl;
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
