@@ -201,7 +201,8 @@ pub mod field_vec {
 #[cfg(test)]
 mod tests {
     use bincode;
-    use rand::{self, Rng};
+    use rand;
+    use rand04_compat::RngExt;
     use serde_derive::{Deserialize, Serialize};
 
     use crate::poly::BivarPoly;
@@ -225,8 +226,8 @@ mod tests {
     fn vecs() {
         let mut rng = rand::thread_rng();
         let vecs = Vecs {
-            curve_points: rng.gen_iter().take(10).collect(),
-            field_elements: rng.gen_iter().take(10).collect(),
+            curve_points: rng.gen_iter04().take(10).collect(),
+            field_elements: rng.gen_iter04().take(10).collect(),
         };
         let ser_vecs = bincode::serialize(&vecs).expect("serialize vecs");
         let de_vecs = bincode::deserialize(&ser_vecs).expect("deserialize vecs");

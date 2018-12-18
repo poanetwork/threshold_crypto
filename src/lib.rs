@@ -24,13 +24,13 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ptr::copy_nonoverlapping;
 
-use byteorder::{BigEndian, ByteOrder};
 use hex_fmt::HexFmt;
-use init_with::InitWith;
 use log::debug;
 use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field};
-use rand::{ChaChaRng, OsRng, Rand, Rng, SeedableRng};
-use rand_derive::Rand;
+use rand::distributions::{Distribution, Standard};
+use rand::{rngs::OsRng, Rng, SeedableRng};
+use rand04_compat::RngExt;
+use rand_chacha::ChaChaRng;
 use serde_derive::{Deserialize, Serialize};
 use tiny_keccak::sha3_256;
 
@@ -58,9 +58,6 @@ pub const PK_SIZE: usize = 48;
 /// The size of a signature's representation in bytes.
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub const SIG_SIZE: usize = 96;
-
-/// The number of words (`u32`) in a ChaCha RNG seed.
-const CHACHA_RNG_SEED_SIZE: usize = 8;
 
 const ERR_OS_RNG: &str = "could not initialize the OS random number generator";
 
@@ -104,7 +101,7 @@ impl PublicKey {
 
     /// Encrypts the message.
     pub fn encrypt_with_rng<R: Rng, M: AsRef<[u8]>>(&self, rng: &mut R, msg: M) -> Ciphertext {
-        let r: Fr = rng.gen();
+        let r: Fr = rng.gen04();
         let u = G1Affine::one().mul(r);
         let v: Vec<u8> = {
             let g = self.0.into_affine().mul(r);
@@ -175,8 +172,14 @@ impl PublicKeyShare {
 
 /// A signature.
 // Note: Random signatures can be generated for testing.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Rand)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Signature(#[serde(with = "serde_impl::projective")] G2);
+
+impl Distribution<Signature> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Signature {
+        Signature(rng.gen04())
+    }
+}
 
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -220,8 +223,14 @@ impl Signature {
 
 /// A signature share.
 // Note: Random signature shares can be generated for testing.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Rand, Hash)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 pub struct SignatureShare(pub Signature);
+
+impl Distribution<SignatureShare> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SignatureShare {
+        SignatureShare(rng.gen())
+    }
+}
 
 impl fmt::Debug for SignatureShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -256,12 +265,9 @@ impl Default for SecretKey {
     }
 }
 
-/// Creates a random `SecretKey` from a given RNG. If you do not need to specify your own RNG, you
-/// should use `SecretKey::random()` as your constructor instead.
-impl Rand for SecretKey {
-    fn rand<R: Rng>(rng: &mut R) -> Self {
-        let mut fr = Fr::rand(rng);
-        SecretKey::from_mut(&mut fr)
+impl Distribution<SecretKey> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
+        SecretKey(Box::new(rng.gen04()))
     }
 }
 
@@ -318,8 +324,7 @@ impl SecretKey {
     /// [`rand::thead_rng()`](https://docs.rs/rand/0.4.3/rand/fn.thread_rng.html) internally as
     /// its RNG.
     pub fn random() -> Self {
-        let mut rng = rand::thread_rng();
-        SecretKey::rand(&mut rng)
+        rand::random()
     }
 
     /// Returns the matching public key.
@@ -359,8 +364,14 @@ impl SecretKey {
 }
 
 /// A secret key share.
-#[derive(Clone, PartialEq, Eq, Rand, Default)]
+#[derive(Clone, PartialEq, Eq, Default)]
 pub struct SecretKeyShare(SecretKey);
+
+impl Distribution<SecretKeyShare> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKeyShare {
+        SecretKeyShare(rng.gen())
+    }
+}
 
 impl fmt::Debug for SecretKeyShare {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -445,8 +456,14 @@ impl Ciphertext {
 }
 
 /// A decryption share. A threshold of decryption shares can be used to decrypt a message.
-#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq, Rand)]
+#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct DecryptionShare(#[serde(with = "serde_impl::projective")] G1);
+
+impl Distribution<DecryptionShare> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> DecryptionShare {
+        DecryptionShare(rng.gen04())
+    }
+}
 
 impl Hash for DecryptionShare {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -577,11 +594,7 @@ impl SecretKeySet {
 /// Returns a hash of the given message in `G2`.
 pub fn hash_g2<M: AsRef<[u8]>>(msg: M) -> G2 {
     let digest = sha3_256(msg.as_ref());
-    let seed = <[u32; CHACHA_RNG_SEED_SIZE]>::init_with_indices(|i| {
-        BigEndian::read_u32(&digest.as_ref()[(4 * i)..(4 * i + 4)])
-    });
-    let mut rng = ChaChaRng::from_seed(&seed);
-    rng.gen()
+    ChaChaRng::from_seed(digest).gen04()
 }
 
 /// Returns a hash of the group element and message, in the second group.
@@ -600,12 +613,9 @@ fn hash_g1_g2<M: AsRef<[u8]>>(g1: G1, msg: M) -> G2 {
 /// Returns the bitwise xor of `bytes` with a sequence of pseudorandom bytes determined by `g1`.
 fn xor_with_hash(g1: G1, bytes: &[u8]) -> Vec<u8> {
     let digest = sha3_256(g1.into_affine().into_compressed().as_ref());
-    let seed = <[u32; CHACHA_RNG_SEED_SIZE]>::init_with_indices(|i| {
-        BigEndian::read_u32(&digest.as_ref()[(4 * i)..(4 * i + 4)])
-    });
-    let mut rng = ChaChaRng::from_seed(&seed);
+    let mut rng = ChaChaRng::from_seed(digest);
     let xor = |(a, b): (u8, &u8)| a ^ b;
-    rng.gen_iter().zip(bytes).map(xor).collect()
+    rng.gen_iter04().zip(bytes).map(xor).collect()
 }
 
 use std::borrow::Borrow;
@@ -674,7 +684,8 @@ mod tests {
 
     use std::collections::BTreeMap;
 
-    use rand::{self, random, Rng};
+    use rand::{self, distributions::Standard, random, Rng};
+    use rand04_compat::rand04::random as random04;
 
     #[test]
     fn test_interpolate() {
@@ -828,7 +839,7 @@ mod tests {
     #[test]
     fn test_hash_g2() {
         let mut rng = rand::thread_rng();
-        let msg: Vec<u8> = (0..1000).map(|_| rng.gen()).collect();
+        let msg: Vec<u8> = rng.sample_iter(&Standard).take(1000).collect();
         let msg_end0: Vec<u8> = msg.iter().chain(b"end0").cloned().collect();
         let msg_end1: Vec<u8> = msg.iter().chain(b"end1").cloned().collect();
 
@@ -841,11 +852,11 @@ mod tests {
     #[test]
     fn test_hash_g1_g2() {
         let mut rng = rand::thread_rng();
-        let msg: Vec<u8> = (0..1000).map(|_| rng.gen()).collect();
+        let msg: Vec<u8> = rng.sample_iter(&Standard).take(1000).collect();
         let msg_end0: Vec<u8> = msg.iter().chain(b"end0").cloned().collect();
         let msg_end1: Vec<u8> = msg.iter().chain(b"end1").cloned().collect();
-        let g0 = rng.gen();
-        let g1 = rng.gen();
+        let g0 = random04();
+        let g1 = random04();
 
         assert_eq!(hash_g1_g2(g0, &msg), hash_g1_g2(g0, &msg));
         assert_ne!(hash_g1_g2(g0, &msg), hash_g1_g2(g0, &msg_end0));
@@ -856,9 +867,8 @@ mod tests {
     /// Some basic sanity checks for the `hash_bytes` function.
     #[test]
     fn test_xor_with_hash() {
-        let mut rng = rand::thread_rng();
-        let g0 = rng.gen();
-        let g1 = rng.gen();
+        let g0 = random04();
+        let g1 = random04();
         let xwh = xor_with_hash;
         assert_eq!(xwh(g0, &[0; 5]), xwh(g0, &[0; 5]));
         assert_ne!(xwh(g0, &[0; 5]), xwh(g1, &[0; 5]));

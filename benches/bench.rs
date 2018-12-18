@@ -4,11 +4,13 @@ use threshold_crypto::Fr;
 
 const TEST_DEGREES: [usize; 4] = [5, 10, 20, 40];
 const TEST_THRESHOLDS: [usize; 4] = [5, 10, 20, 40];
-const RNG_SEED: [u32; 4] = [1, 2, 3, 4];
+const RNG_SEED: [u8; 16] = *b"0123456789abcdef";
 
 mod poly_benches {
     use super::*;
-    use rand::{Rng, SeedableRng, XorShiftRng};
+    use rand::SeedableRng;
+    use rand04_compat::RngExt;
+    use rand_xorshift::XorShiftRng;
 
     /// Benchmarks multiplication of two polynomials.
     fn multiplication(c: &mut Criterion) {
@@ -67,7 +69,8 @@ mod poly_benches {
         c.bench_function_over_inputs(
             "Polynomial interpolation",
             move |b, &&deg| {
-                let rand_samples = || (0..=deg).map(|i| (i, rng.gen::<Fr>())).collect::<Vec<_>>();
+                let mut gen_tuple = |i: usize| (i, rng.gen04::<Fr>());
+                let rand_samples = move || (0..=deg).map(&mut gen_tuple).collect::<Vec<_>>();
                 b.iter_with_setup(rand_samples, Poly::interpolate)
             },
             &TEST_DEGREES,
@@ -83,7 +86,8 @@ mod poly_benches {
 
 mod public_key_set_benches {
     use super::*;
-    use rand::{SeedableRng, XorShiftRng};
+    use rand::SeedableRng;
+    use rand_xorshift::XorShiftRng;
     use std::collections::BTreeMap;
     use threshold_crypto::SecretKeySet;
 

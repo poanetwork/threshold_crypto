@@ -14,7 +14,7 @@ use byteorder::{BigEndian, ByteOrder};
 use pairing::{
     Field, LegendreSymbol, PrimeField, PrimeFieldDecodingError, PrimeFieldRepr, SqrtField,
 };
-use rand;
+use rand04_compat::rand04 as rand;
 
 /// Modular exponentiation
 ///

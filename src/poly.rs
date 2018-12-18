@@ -24,6 +24,7 @@ use std::{cmp, iter, ops};
 
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
+use rand04_compat::RngExt;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
@@ -295,7 +296,7 @@ impl Poly {
         if degree == usize::max_value() {
             return Err(Error::DegreeTooHigh);
         }
-        let coeff: Vec<Fr> = (0..=degree).map(|_| rng.gen()).collect();
+        let coeff: Vec<Fr> = rng.gen_iter04().take(degree + 1).collect();
         Ok(Poly::from(coeff))
     }
 
@@ -566,7 +567,7 @@ impl BivarPoly {
             .ok_or(Error::DegreeTooHigh)?;
         let poly = BivarPoly {
             degree,
-            coeff: (0..len).map(|_| rng.gen()).collect(),
+            coeff: rng.gen_iter04().take(len).collect(),
         };
         Ok(poly)
     }
