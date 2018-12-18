@@ -1,3 +1,7 @@
+//! Serialization and deserialization implementations for group and field elements.
+
+pub use self::field_vec::FieldWrap;
+
 use std::borrow::Cow;
 
 use crate::G1;
@@ -43,7 +47,7 @@ impl<'de> Deserialize<'de> for BivarCommitment {
 }
 
 /// Serialization and deserialization of a group element's compressed representation.
-pub mod projective {
+pub(crate) mod projective {
     use std::fmt;
     use std::marker::PhantomData;
 
@@ -101,7 +105,7 @@ pub mod projective {
 }
 
 /// Serialization and deserialization of vectors of projective curve elements.
-pub mod projective_vec {
+pub(crate) mod projective_vec {
     use std::borrow::Borrow;
     use std::iter::FromIterator;
     use std::marker::PhantomData;
@@ -154,7 +158,7 @@ pub mod projective_vec {
 }
 
 /// Serialization and deserialization of vectors of field elements.
-pub mod field_vec {
+pub(crate) mod field_vec {
     use std::borrow::Borrow;
 
     use pairing::PrimeField;
@@ -164,9 +168,10 @@ pub mod field_vec {
     use crate::{Fr, FrRepr};
 
     /// A wrapper type to facilitate serialization and deserialization of field elements.
-    pub struct FieldWrap<B>(B);
+    pub struct FieldWrap<B>(pub B);
 
     impl FieldWrap<Fr> {
+        /// Returns the wrapped field element.
         pub fn into_inner(self) -> Fr {
             self.0
         }
