@@ -22,8 +22,7 @@ An [official security audit](https://github.com/poanetwork/wiki/wiki/Threshold-C
 
 ```toml
 [dependencies]
-rand = "0.4"
-threshold_crypto = { version = "0.2", git = "https://github.com/poanetwork/threshold_crypto" }
+threshold_crypto = { version = "0.3", git = "https://github.com/poanetwork/threshold_crypto" }
 ```
 
 `main.rs`:
@@ -36,8 +35,8 @@ use threshold_crypto::SecretKey;
 
 /// Very basic secret key usage.
 fn main() {
-    let sk0: SecretKey = rand::random();
-    let sk1: SecretKey = rand::random();
+    let sk0 = SecretKey::random();
+    let sk1 = SecretKey::random();
 
     let pk0 = sk0.public_key();
 
