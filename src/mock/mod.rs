@@ -15,7 +15,7 @@ pub mod ms8;
 use std::{fmt, mem, slice};
 
 use pairing::{EncodedPoint, Field, GroupDecodingError, PrimeField};
-use rand;
+use rand04_compat::rand04 as rand;
 
 use super::{CurveAffine, CurveProjective, Engine};
 
