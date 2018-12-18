@@ -321,7 +321,7 @@ impl SecretKey {
     /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
     /// number generator, you should use the constructor: `SecretKey::rand()`. If you do not need
     /// to specify your own RNG, you should use the `SecretKey::random()` constructor, which uses
-    /// [`rand::thead_rng()`](https://docs.rs/rand/0.4.3/rand/fn.thread_rng.html) internally as
+    /// [`rand::thead_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html) internally as
     /// its RNG.
     pub fn random() -> Self {
         rand::random()
@@ -615,7 +615,7 @@ fn xor_with_hash(g1: G1, bytes: &[u8]) -> Vec<u8> {
     let digest = sha3_256(g1.into_affine().into_compressed().as_ref());
     let mut rng = ChaChaRng::from_seed(digest);
     let xor = |(a, b): (u8, &u8)| a ^ b;
-    rng.gen_iter04().zip(bytes).map(xor).collect()
+    rng.sample_iter(&Standard).zip(bytes).map(xor).collect()
 }
 
 use std::borrow::Borrow;
