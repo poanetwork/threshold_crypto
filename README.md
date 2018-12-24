@@ -5,7 +5,7 @@
 A pairing-based threshold cryptosystem for collaborative decryption and
 signatures.
 
-The `threshold_crypto` crate provides constructors for encrypted message handling. It utilizes the [`pairing`](https://crates.io/crates/pairing) elliptic curve library to create and enable reconstruction of public and private key shares.
+The `threshold_crypto` crate provides constructors for encrypted message handling. It utilizes the [`pairing`](https://crates.io/crates/pairing) elliptic curve library to create and enable reconstruction of public and private key shares. The elliptic curve arithmetic and pairings are based on [Boneh-Lynn-Shacham](https://www.iacr.org/archive/asiacrypt2001/22480516.pdf) (BLS12) signatures.
 
 In a network environment, messages are signed and encrypted, and key and
 signature shares are distributed to network participants. A message can be
