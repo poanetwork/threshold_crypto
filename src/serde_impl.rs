@@ -82,7 +82,7 @@ pub(crate) mod projective {
         impl<'de, C: CurveProjective> Visitor<'de> for TupleVisitor<C> {
             type Value = C;
 
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let len = <C::Affine as CurveAffine>::Compressed::size();
                 write!(f, "a tuple of size {}", len)
             }
