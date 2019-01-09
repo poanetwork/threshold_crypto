@@ -11,7 +11,7 @@
 )]
 #![warn(missing_docs)]
 
-pub extern crate pairing;
+pub use pairing;
 
 mod into_fr;
 mod secret;
@@ -72,7 +72,7 @@ impl Hash for PublicKey {
 }
 
 impl fmt::Debug for PublicKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
         write!(f, "PublicKey({:0.10})", HexFmt(uncomp))
     }
@@ -133,7 +133,7 @@ impl PublicKey {
 pub struct PublicKeyShare(PublicKey);
 
 impl fmt::Debug for PublicKeyShare {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
         write!(f, "PublicKeyShare({:0.10})", HexFmt(uncomp))
     }
@@ -182,7 +182,7 @@ impl Distribution<Signature> for Standard {
 }
 
 impl fmt::Debug for Signature {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
         write!(f, "Signature({:0.10})", HexFmt(uncomp))
     }
@@ -233,7 +233,7 @@ impl Distribution<SignatureShare> for Standard {
 }
 
 impl fmt::Debug for SignatureShare {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let uncomp = (self.0).0.into_affine().into_uncompressed();
         write!(f, "SignatureShare({:0.10})", HexFmt(uncomp))
     }
@@ -287,7 +287,7 @@ impl Drop for SecretKey {
 }
 /// A debug statement where the secret prime field element is redacted.
 impl fmt::Debug for SecretKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("SecretKey").field(&"...").finish()
     }
 }
@@ -374,7 +374,7 @@ impl Distribution<SecretKeyShare> for Standard {
 }
 
 impl fmt::Debug for SecretKeyShare {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("SecretKeyShare").field(&"...").finish()
     }
 }

@@ -49,7 +49,7 @@ impl Clone for Poly {
 
 /// A debug statement where the `coeff` vector of prime field elements has been redacted.
 impl Debug for Poly {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Poly").field("coeff", &"...").finish()
     }
 }
@@ -530,7 +530,7 @@ impl Drop for BivarPoly {
 
 /// A debug statement where the `coeff` vector has been redacted.
 impl Debug for BivarPoly {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("BivarPoly")
             .field("degree", &self.degree)
             .field("coeff", &"...")
