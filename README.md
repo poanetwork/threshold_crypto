@@ -1,5 +1,7 @@
 # threshold_crypto
 
+[![crates.io](https://img.shields.io/crates/v/threshold_crypto.svg)](https://crates.io/crates/threshold_crypto)
+[![Documentation](https://docs.rs/threshold_crypto/badge.svg)](https://docs.rs/threshold_crypto)
 [![Build Status](https://travis-ci.org/poanetwork/threshold_crypto.svg?branch=master)](https://travis-ci.org/poanetwork/threshold_crypto)
 
 A pairing-based threshold cryptosystem for collaborative decryption and
