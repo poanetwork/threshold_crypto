@@ -147,6 +147,25 @@ impl SerializeSecret for crate::SecretKey {
     }
 }
 
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+impl<'de> Deserialize<'de> for crate::SecretKeyShare {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(crate::SecretKeyShare(Deserialize::deserialize(
+            deserializer,
+        )?))
+    }
+}
+
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+impl SerializeSecret for crate::SecretKeyShare {
+    fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize_secret(serializer)
+    }
+}
+
 /// A type with the same content as `BivarCommitment`, but that has not been validated yet.
 #[derive(Serialize, Deserialize)]
 struct WireBivarCommitment<'a> {
@@ -401,6 +420,30 @@ mod tests {
             assert_eq!(sk, de);
 
             let de_serde_secret: SerdeSecret<SecretKey> =
+                bincode::deserialize(&ser_ref).expect("deserialize secret key");
+            assert_eq!(sk, de_serde_secret.into_inner());
+
+            let ser_val = bincode::serialize(&SerdeSecret(sk)).expect("serialize secret key");
+            assert_eq!(ser_ref, ser_val);
+        }
+    }
+
+    #[test]
+    #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+    fn serde_secret_key_share() {
+        use crate::serde_impl::SerdeSecret;
+        use crate::SecretKeyShare;
+        use rand::{thread_rng, Rng};
+
+        let mut rng = thread_rng();
+        for _ in 0..2048 {
+            let sk: SecretKeyShare = rng.gen();
+            let ser_ref = bincode::serialize(&SerdeSecret(&sk)).expect("serialize secret key");
+
+            let de = bincode::deserialize(&ser_ref).expect("deserialize secret key");
+            assert_eq!(sk, de);
+
+            let de_serde_secret: SerdeSecret<SecretKeyShare> =
                 bincode::deserialize(&ser_ref).expect("deserialize secret key");
             assert_eq!(sk, de_serde_secret.into_inner());
 
