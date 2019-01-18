@@ -24,6 +24,15 @@ pub(crate) mod serialize_secret_internal {
     pub trait SerializeSecret {
         fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>;
     }
+
+    impl<T: SerializeSecret> SerializeSecret for &T {
+        fn serialize_secret<S: Serializer>(
+            &self,
+            serializer: S,
+        ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
+            (*self).serialize_secret(serializer)
+        }
+    }
 }
 
 /// `SerdeSecret` is a wrapper struct for serializing and deserializing secret keys. Due to security
@@ -53,18 +62,88 @@ impl<T> SerdeSecret<T> {
 }
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for SerdeSecret<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where
-        D: Deserializer<'de>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
     {
         Ok(SerdeSecret(Deserialize::deserialize(deserializer)?))
     }
 }
 
 impl<'de, T: SerializeSecret> Serialize for SerdeSecret<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where
-        S: Serializer
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
     {
         self.0.serialize_secret(serializer)
+    }
+}
+
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+impl<'de> Deserialize<'de> for crate::SecretKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use pairing::bls12_381;
+        use pairing::PrimeField;
+
+        use serde::de;
+        use std::fmt;
+
+        struct ReprVisitor;
+        impl<'de> serde::de::Visitor<'de> for ReprVisitor {
+            type Value = [u64; 4];
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "A tuple of four u64 integers.")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let mut repr = [0u64; 4];
+                for (num, part) in repr.iter_mut().enumerate() {
+                    *part = match seq.next_element()? {
+                        Some(x) => x,
+                        None => return Err(de::Error::invalid_length(num + 1, &"Expected 4 u64s")),
+                    };
+                }
+                Ok(repr)
+            }
+        }
+
+        let repr = deserializer.deserialize_tuple(4, ReprVisitor)?;
+        let mut fr = match bls12_381::Fr::from_repr(bls12_381::FrRepr(repr)) {
+            Ok(x) => x,
+            Err(pairing::PrimeFieldDecodingError::NotInField(_)) => {
+                return Err(de::Error::invalid_value(
+                    de::Unexpected::Other(&"Number outside of prime field."),
+                    &"Valid prime field element.",
+                ))
+            }
+        };
+
+        Ok(crate::SecretKey::from_mut(&mut fr))
+    }
+}
+
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+impl SerializeSecret for crate::SecretKey {
+    fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use pairing::PrimeField;
+        use serde::ser::SerializeTuple;
+
+        let repr: &[u64] = &self.0.into_repr().0;
+        debug_assert_eq!(repr.len(), 4);
+
+        let mut serialize_tuple = serializer.serialize_tuple(4)?;
+        for part in repr {
+            serialize_tuple.serialize_element(part)?;
+        }
+
+        serialize_tuple.end()
     }
 }
 
@@ -303,6 +382,30 @@ mod tests {
             let ser_comm = bincode::serialize(&comm).expect("serialize commitment");
             let de_comm = bincode::deserialize(&ser_comm).expect("deserialize commitment");
             assert_eq!(comm, de_comm);
+        }
+    }
+
+    #[test]
+    #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+    fn serde_secret_key() {
+        use crate::serde_impl::SerdeSecret;
+        use crate::SecretKey;
+        use rand::{thread_rng, Rng};
+
+        let mut rng = thread_rng();
+        for _ in 0..2048 {
+            let sk: SecretKey = rng.gen();
+            let ser_ref = bincode::serialize(&SerdeSecret(&sk)).expect("serialize secret key");
+
+            let de = bincode::deserialize(&ser_ref).expect("deserialize secret key");
+            assert_eq!(sk, de);
+
+            let de_serde_secret: SerdeSecret<SecretKey> =
+                bincode::deserialize(&ser_ref).expect("deserialize secret key");
+            assert_eq!(sk, de_serde_secret.into_inner());
+
+            let ser_val = bincode::serialize(&SerdeSecret(sk)).expect("serialize secret key");
+            assert_eq!(ser_ref, ser_val);
         }
     }
 }
