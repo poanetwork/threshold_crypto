@@ -15,7 +15,7 @@ use crate::serde_impl::serialize_secret_internal::SerializeSecret;
 
 const ERR_DEG: &str = "commitment degree does not match coefficients";
 
-pub(crate) mod serialize_secret_internal {
+mod serialize_secret_internal {
     use serde::Serializer;
 
     /// To avoid deriving [`Serialize`] automatically for structs containing secret keys this trait
@@ -70,7 +70,7 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for SerdeSecret<T> {
     }
 }
 
-impl<'de, T: SerializeSecret> Serialize for SerdeSecret<T> {
+impl<T: SerializeSecret> Serialize for SerdeSecret<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -79,43 +79,16 @@ impl<'de, T: SerializeSecret> Serialize for SerdeSecret<T> {
     }
 }
 
-#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 impl<'de> Deserialize<'de> for crate::SecretKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        use pairing::bls12_381;
+        use crate::{Fr, FrRepr};
         use pairing::PrimeField;
-
         use serde::de;
-        use std::fmt;
 
-        struct ReprVisitor;
-        impl<'de> serde::de::Visitor<'de> for ReprVisitor {
-            type Value = [u64; 4];
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write!(formatter, "A tuple of four u64 integers.")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: de::SeqAccess<'de>,
-            {
-                let mut repr = [0u64; 4];
-                for (num, part) in repr.iter_mut().enumerate() {
-                    *part = match seq.next_element()? {
-                        Some(x) => x,
-                        None => return Err(de::Error::invalid_length(num + 1, &"Expected 4 u64s")),
-                    };
-                }
-                Ok(repr)
-            }
-        }
-
-        let repr = deserializer.deserialize_tuple(4, ReprVisitor)?;
-        let mut fr = match bls12_381::Fr::from_repr(bls12_381::FrRepr(repr)) {
+        let mut fr = match Fr::from_repr(FrRepr(Deserialize::deserialize(deserializer)?)) {
             Ok(x) => x,
             Err(pairing::PrimeFieldDecodingError::NotInField(_)) => {
                 return Err(de::Error::invalid_value(
@@ -129,25 +102,14 @@ impl<'de> Deserialize<'de> for crate::SecretKey {
     }
 }
 
-#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 impl SerializeSecret for crate::SecretKey {
     fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use pairing::PrimeField;
-        use serde::ser::SerializeTuple;
 
-        let repr: &[u64] = &self.0.into_repr().0;
-        debug_assert_eq!(repr.len(), 4);
-
-        let mut serialize_tuple = serializer.serialize_tuple(4)?;
-        for part in repr {
-            serialize_tuple.serialize_element(part)?;
-        }
-
-        serialize_tuple.end()
+        Serialize::serialize(&self.0.into_repr().0, serializer)
     }
 }
 
-#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 impl<'de> Deserialize<'de> for crate::SecretKeyShare {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -159,7 +121,6 @@ impl<'de> Deserialize<'de> for crate::SecretKeyShare {
     }
 }
 
-#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 impl SerializeSecret for crate::SecretKeyShare {
     fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.0.serialize_secret(serializer)
@@ -429,7 +390,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
     fn serde_secret_key_share() {
         use crate::serde_impl::SerdeSecret;
         use crate::SecretKeyShare;
@@ -449,6 +409,9 @@ mod tests {
 
             let ser_val = bincode::serialize(&SerdeSecret(sk)).expect("serialize secret key");
             assert_eq!(ser_ref, ser_val);
+
+            #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+            assert_eq!(ser_val.len(), 32);
         }
     }
 }
