@@ -3,6 +3,7 @@
 pub use self::field_vec::FieldWrap;
 
 use std::borrow::Cow;
+use std::ops::Deref;
 
 use crate::G1;
 use serde::de::Error as DeserializeError;
@@ -10,8 +11,121 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::poly::{coeff_pos, BivarCommitment};
+use crate::serde_impl::serialize_secret_internal::SerializeSecret;
 
 const ERR_DEG: &str = "commitment degree does not match coefficients";
+
+mod serialize_secret_internal {
+    use serde::Serializer;
+
+    /// To avoid deriving [`Serialize`] automatically for structs containing secret keys this trait
+    /// should be implemented instead. It only enables explicit serialization through
+    /// [`::serde_impls::SerdeSecret`].
+    pub trait SerializeSecret {
+        fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>;
+    }
+
+    impl<T: SerializeSecret> SerializeSecret for &T {
+        fn serialize_secret<S: Serializer>(
+            &self,
+            serializer: S,
+        ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
+            (*self).serialize_secret(serializer)
+        }
+    }
+}
+
+/// `SerdeSecret` is a wrapper struct for serializing and deserializing secret keys. Due to security
+/// concerns serialize shouldn't be implemented for secret keys to avoid accidental leakage.
+///
+/// Whenever this struct is used the integrity of security boundaries should be checked carefully.
+pub struct SerdeSecret<T>(T);
+
+impl<T> Deref for SerdeSecret<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner()
+    }
+}
+
+impl<T> SerdeSecret<T> {
+    /// Returns the actual secret from the wrapper
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+
+    /// Returns a reference to the actual secret contained in the wrapper
+    pub fn inner(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for SerdeSecret<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(SerdeSecret(Deserialize::deserialize(deserializer)?))
+    }
+}
+
+impl<T: SerializeSecret> Serialize for SerdeSecret<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize_secret(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for crate::SecretKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use crate::{Fr, FrRepr};
+        use pairing::PrimeField;
+        use serde::de;
+
+        let mut fr = match Fr::from_repr(FrRepr(Deserialize::deserialize(deserializer)?)) {
+            Ok(x) => x,
+            Err(pairing::PrimeFieldDecodingError::NotInField(_)) => {
+                return Err(de::Error::invalid_value(
+                    de::Unexpected::Other(&"Number outside of prime field."),
+                    &"Valid prime field element.",
+                ))
+            }
+        };
+
+        Ok(crate::SecretKey::from_mut(&mut fr))
+    }
+}
+
+impl SerializeSecret for crate::SecretKey {
+    fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use pairing::PrimeField;
+
+        Serialize::serialize(&self.0.into_repr().0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for crate::SecretKeyShare {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(crate::SecretKeyShare(Deserialize::deserialize(
+            deserializer,
+        )?))
+    }
+}
+
+impl SerializeSecret for crate::SecretKeyShare {
+    fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize_secret(serializer)
+    }
+}
 
 /// A type with the same content as `BivarCommitment`, but that has not been validated yet.
 #[derive(Serialize, Deserialize)]
@@ -248,6 +362,56 @@ mod tests {
             let ser_comm = bincode::serialize(&comm).expect("serialize commitment");
             let de_comm = bincode::deserialize(&ser_comm).expect("deserialize commitment");
             assert_eq!(comm, de_comm);
+        }
+    }
+
+    #[test]
+    #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+    fn serde_secret_key() {
+        use crate::serde_impl::SerdeSecret;
+        use crate::SecretKey;
+        use rand::{thread_rng, Rng};
+
+        let mut rng = thread_rng();
+        for _ in 0..2048 {
+            let sk: SecretKey = rng.gen();
+            let ser_ref = bincode::serialize(&SerdeSecret(&sk)).expect("serialize secret key");
+
+            let de = bincode::deserialize(&ser_ref).expect("deserialize secret key");
+            assert_eq!(sk, de);
+
+            let de_serde_secret: SerdeSecret<SecretKey> =
+                bincode::deserialize(&ser_ref).expect("deserialize secret key");
+            assert_eq!(sk, de_serde_secret.into_inner());
+
+            let ser_val = bincode::serialize(&SerdeSecret(sk)).expect("serialize secret key");
+            assert_eq!(ser_ref, ser_val);
+        }
+    }
+
+    #[test]
+    fn serde_secret_key_share() {
+        use crate::serde_impl::SerdeSecret;
+        use crate::SecretKeyShare;
+        use rand::{thread_rng, Rng};
+
+        let mut rng = thread_rng();
+        for _ in 0..2048 {
+            let sk: SecretKeyShare = rng.gen();
+            let ser_ref = bincode::serialize(&SerdeSecret(&sk)).expect("serialize secret key");
+
+            let de = bincode::deserialize(&ser_ref).expect("deserialize secret key");
+            assert_eq!(sk, de);
+
+            let de_serde_secret: SerdeSecret<SecretKeyShare> =
+                bincode::deserialize(&ser_ref).expect("deserialize secret key");
+            assert_eq!(sk, de_serde_secret.into_inner());
+
+            let ser_val = bincode::serialize(&SerdeSecret(sk)).expect("serialize secret key");
+            assert_eq!(ser_ref, ser_val);
+
+            #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+            assert_eq!(ser_val.len(), 32);
         }
     }
 }

@@ -254,6 +254,11 @@ impl SignatureShare {
 /// A secret key; wraps a single prime field element. The field element is
 /// heap allocated to avoid any stack copying that result when passing
 /// `SecretKey`s between stack frames.
+///
+/// # Serde integration
+/// `SecretKey` implements `Deserialize` but not `Serialize` to avoid accidental
+/// serialization in insecure contexts. To enable both use the `::serde_impl::SerdeSecret`
+/// wrapper which implements both `Deserialize` and `Serialize`.
 #[derive(PartialEq, Eq)]
 pub struct SecretKey(Box<Fr>);
 
@@ -364,6 +369,11 @@ impl SecretKey {
 }
 
 /// A secret key share.
+///
+/// # Serde integration
+/// `SecretKeyShare` implements `Deserialize` but not `Serialize` to avoid accidental
+/// serialization in insecure contexts. To enable both use the `::serde_impl::SerdeSecret`
+/// wrapper which implements both `Deserialize` and `Serialize`.
 #[derive(Clone, PartialEq, Eq, Default)]
 pub struct SecretKeyShare(SecretKey);
 
