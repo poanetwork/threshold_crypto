@@ -3,6 +3,7 @@ use pairing::{Field, PrimeField};
 
 /// A conversion into an element of the field `Fr`.
 pub trait IntoFr: Copy {
+    /// Converts `self` to a field element.
     fn into_fr(self) -> Fr;
 }
 

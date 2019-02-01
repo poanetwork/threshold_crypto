@@ -94,7 +94,7 @@ impl<'de> Deserialize<'de> for crate::SecretKey {
                 return Err(de::Error::invalid_value(
                     de::Unexpected::Other(&"Number outside of prime field."),
                     &"Valid prime field element.",
-                ))
+                ));
             }
         };
 

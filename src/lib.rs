@@ -13,6 +13,7 @@
 
 pub use pairing;
 
+mod cmp_pairing;
 mod into_fr;
 mod secret;
 
@@ -20,6 +21,7 @@ pub mod error;
 pub mod poly;
 pub mod serde_impl;
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ptr::copy_nonoverlapping;
@@ -34,10 +36,12 @@ use rand_chacha::ChaChaRng;
 use serde_derive::{Deserialize, Serialize};
 use tiny_keccak::sha3_256;
 
+use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, FromBytesError, FromBytesResult, Result};
-use crate::into_fr::IntoFr;
 use crate::poly::{Commitment, Poly};
 use crate::secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
+
+pub use crate::into_fr::IntoFr;
 
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub use pairing::bls12_381::{Bls12 as PEngine, Fr, FrRepr, G1Affine, G2Affine, G1, G2};
@@ -75,6 +79,18 @@ impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let uncomp = self.0.into_affine().into_uncompressed();
         write!(f, "PublicKey({:0.10})", HexFmt(uncomp))
+    }
+}
+
+impl PartialOrd for PublicKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl Ord for PublicKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        cmp_projective(&self.0, &other.0)
     }
 }
 
@@ -129,7 +145,7 @@ impl PublicKey {
 }
 
 /// A public key share.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct PublicKeyShare(PublicKey);
 
 impl fmt::Debug for PublicKeyShare {
@@ -174,6 +190,18 @@ impl PublicKeyShare {
 // Note: Random signatures can be generated for testing.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Signature(#[serde(with = "serde_impl::projective")] G2);
+
+impl PartialOrd for Signature {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl Ord for Signature {
+    fn cmp(&self, other: &Self) -> Ordering {
+        cmp_projective(&self.0, &other.0)
+    }
+}
 
 impl Distribution<Signature> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Signature {
@@ -223,7 +251,7 @@ impl Signature {
 
 /// A signature share.
 // Note: Random signature shares can be generated for testing.
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SignatureShare(pub Signature);
 
 impl Distribution<SignatureShare> for Standard {
@@ -455,6 +483,22 @@ impl Hash for Ciphertext {
     }
 }
 
+impl PartialOrd for Ciphertext {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl Ord for Ciphertext {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let Ciphertext(ref u0, ref v0, ref w0) = self;
+        let Ciphertext(ref u1, ref v1, ref w1) = other;
+        cmp_projective(u0, u1)
+            .then(v0.cmp(v1))
+            .then(cmp_projective(w0, w1))
+    }
+}
+
 impl Ciphertext {
     /// Returns `true` if this is a valid ciphertext. This check is necessary to prevent
     /// chosen-ciphertext attacks.
@@ -520,6 +564,38 @@ impl PublicKeySet {
     }
 
     /// Combines the shares into a signature that can be verified with the main public key.
+    ///
+    /// The validity of the shares is not checked: If one of them is invalid, the resulting
+    /// signature also is. Only returns an error if there is a duplicate index or too few shares.
+    ///
+    /// Validity of signature shares should be checked beforehand, or validity of the result
+    /// afterwards:
+    ///
+    /// ```
+    /// # extern crate rand;
+    /// #
+    /// # use std::collections::BTreeMap;
+    /// # use threshold_crypto::SecretKeySet;
+    /// #
+    /// let sk_set = SecretKeySet::random(3, &mut rand::thread_rng());
+    /// let sk_shares: Vec<_> = (0..6).map(|i| sk_set.secret_key_share(i)).collect();
+    /// let pk_set = sk_set.public_keys();
+    /// let msg = "Happy birthday! If this is signed, at least four people remembered!";
+    ///
+    /// // Create four signature shares for the message.
+    /// let sig_shares: BTreeMap<_, _> = (0..4).map(|i| (i, sk_shares[i].sign(msg))).collect();
+    ///
+    /// // Validate the signature shares.
+    /// for (i, sig_share) in &sig_shares {
+    ///     assert!(pk_set.public_key_share(*i).verify(sig_share, msg));
+    /// }
+    ///
+    /// // Combine them to produce the main signature.
+    /// let sig = pk_set.combine_signatures(&sig_shares).expect("not enough shares");
+    ///
+    /// // Validate the main signature. If the shares were valid, this can't fail.
+    /// assert!(pk_set.public_key().verify(&sig, msg));
+    /// ```
     pub fn combine_signatures<'a, T, I>(&self, shares: I) -> Result<Signature>
     where
         I: IntoIterator<Item = (T, &'a SignatureShare)>,
