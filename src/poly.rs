@@ -17,6 +17,7 @@
 //! polynomials (in two variables) over a field `Fr`, as well as their _commitments_ in `G`.
 
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::mem::size_of_val;
@@ -27,6 +28,7 @@ use rand::Rng;
 use rand04_compat::RngExt;
 use serde_derive::{Deserialize, Serialize};
 
+use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, Result};
 use crate::into_fr::IntoFr;
 use crate::secret::{clear_fr, ContainsSecret, MemRange, Safe};
@@ -436,6 +438,24 @@ pub struct Commitment {
     pub(super) coeff: Vec<G1>,
 }
 
+impl PartialOrd for Commitment {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl Ord for Commitment {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.coeff.len().cmp(&other.coeff.len()).then_with(|| {
+            self.coeff
+                .iter()
+                .zip(&other.coeff)
+                .find(|(x, y)| x != y)
+                .map_or(Ordering::Equal, |(x, y)| cmp_projective(x, y))
+        })
+    }
+}
+
 impl Hash for Commitment {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.coeff.len().hash(state);
@@ -657,6 +677,24 @@ impl Hash for BivarCommitment {
     }
 }
 
+impl PartialOrd for BivarCommitment {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl Ord for BivarCommitment {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.degree.cmp(&other.degree).then_with(|| {
+            self.coeff
+                .iter()
+                .zip(&other.coeff)
+                .find(|(x, y)| x != y)
+                .map_or(Ordering::Equal, |(x, y)| cmp_projective(x, y))
+        })
+    }
+}
+
 impl BivarCommitment {
     /// Returns the polynomial's degree: It is the same in both variables.
     pub fn degree(&self) -> usize {
@@ -760,7 +798,7 @@ mod tests {
         let x_pow_1 = Poly::monomial(1);
         let poly = x_pow_3 * 5 + x_pow_1 - 2;
 
-        let coeff: Vec<_> = [-2, 1, 0, 5].into_iter().map(IntoFr::into_fr).collect();
+        let coeff: Vec<_> = [-2, 1, 0, 5].iter().map(IntoFr::into_fr).collect();
         assert_eq!(Poly { coeff }, poly);
         let samples = vec![(-1, -8), (2, 40), (3, 136), (5, 628)];
         for &(x, y) in &samples {
