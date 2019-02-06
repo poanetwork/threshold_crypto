@@ -39,7 +39,7 @@ mod serialize_secret_internal {
 /// concerns serialize shouldn't be implemented for secret keys to avoid accidental leakage.
 ///
 /// Whenever this struct is used the integrity of security boundaries should be checked carefully.
-pub struct SerdeSecret<T>(T);
+pub struct SerdeSecret<T>(pub T);
 
 impl<T> Deref for SerdeSecret<T> {
     type Target = T;
