@@ -1,5 +1,5 @@
 use bincode::{deserialize, serialize};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, SecretKey, Signature};
 
 #[derive(Deserialize, Serialize)]

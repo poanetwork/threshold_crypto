@@ -8,7 +8,6 @@ use std::ops::Deref;
 use crate::G1;
 use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_derive::{Deserialize, Serialize};
 
 use crate::poly::{coeff_pos, BivarCommitment};
 use crate::serde_impl::serialize_secret_internal::SerializeSecret;
@@ -322,7 +321,7 @@ mod tests {
     use bincode;
     use rand;
     use rand04_compat::RngExt;
-    use serde_derive::{Deserialize, Serialize};
+    use serde::{Deserialize, Serialize};
 
     use crate::poly::BivarPoly;
     use crate::{Fr, G1};

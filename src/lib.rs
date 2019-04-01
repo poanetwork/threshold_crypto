@@ -33,7 +33,7 @@ use rand::distributions::{Distribution, Standard};
 use rand::{rngs::OsRng, Rng, SeedableRng};
 use rand04_compat::RngExt;
 use rand_chacha::ChaChaRng;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use tiny_keccak::sha3_256;
 
 use crate::cmp_pairing::cmp_projective;

@@ -26,7 +26,7 @@ use std::{cmp, iter, ops};
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 use rand04_compat::RngExt;
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, Result};
