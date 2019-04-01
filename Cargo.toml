@@ -27,17 +27,15 @@ lazy_static = "1.1.0"
 log = "0.4.6"
 memsec = "0.5.4"
 pairing = { version = "0.14.2", features = ["u128-support"] }
-rand = "0.6.4"
+rand = "0.6.5"
 rand04_compat = "0.1.1"
 rand_chacha = "0.1.1"
-serde = "1.0.84"
-serde_derive = "1.0.84"
+serde = { version = "1.0.89", features = ["derive"] }
 tiny-keccak = "1.4.2"
 
 [dev-dependencies]
 bincode = "1.0.1"
 criterion = "0.2.7"
-serde_derive = "1.0.84"
 rand_xorshift = "0.1.1"
 
 [[bench]]
