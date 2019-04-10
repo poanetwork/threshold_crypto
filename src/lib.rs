@@ -327,9 +327,10 @@ impl fmt::Debug for SecretKey {
 
 impl ContainsSecret for SecretKey {
     fn secret_memory(&self) -> MemRange {
-        let ptr = &*self.0 as *const Fr as *mut u8;
-        let n_bytes = *FR_SIZE;
-        MemRange { ptr, n_bytes }
+        MemRange {
+            ptr: &*self.0 as *const Fr as *mut u8,
+            n_bytes: FR_SIZE,
+        }
     }
 }
 

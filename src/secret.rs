@@ -4,19 +4,15 @@
 use std::mem::{size_of, size_of_val};
 use std::ops::{Deref, DerefMut};
 
-use lazy_static::lazy_static;
 use memsec::memzero;
 
 use crate::Fr;
 
-lazy_static! {
-    /// The size in bytes of a single field element.
-    pub(crate) static ref FR_SIZE: usize = size_of::<Fr>();
-}
+pub(crate) const FR_SIZE: usize = size_of::<Fr>();
 
 /// Overwrites a single field element with zeros.
 pub(crate) fn clear_fr(fr_ptr: *const Fr) {
-    unsafe { memzero(fr_ptr as *mut u8, *FR_SIZE) };
+    unsafe { memzero(fr_ptr as *mut u8, FR_SIZE) };
 }
 
 pub(crate) struct MemRange {

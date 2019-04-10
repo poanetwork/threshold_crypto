@@ -23,7 +23,6 @@ byteorder = "1.2.7"
 errno = "0.2.4"
 failure = "0.1.5"
 hex_fmt = "0.3.0"
-lazy_static = "1.1.0"
 log = "0.4.6"
 memsec = "0.5.4"
 pairing = { version = "0.14.2", features = ["u128-support"] }
