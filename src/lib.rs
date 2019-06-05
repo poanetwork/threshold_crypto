@@ -299,6 +299,10 @@ impl Default for SecretKey {
 }
 
 impl Distribution<SecretKey> for Standard {
+    /// Creates a new random instance of `SecretKey`. If you do not need to specify your own RNG,
+    /// you should use the [`SecretKey::random()`](struct.SecretKey.html#method.random) constructor,
+    /// which uses [`rand::thread_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html)
+    /// internally as its RNG.
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
         SecretKey(Box::new(rng.gen04()))
     }
@@ -353,10 +357,12 @@ impl SecretKey {
     }
 
     /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
-    /// number generator, you should use the constructor: `SecretKey::rand()`. If you do not need
-    /// to specify your own RNG, you should use the `SecretKey::random()` constructor, which uses
-    /// [`rand::thead_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html) internally as
-    /// its RNG.
+    /// number generator, you should use the constructor:
+    /// [`SecretKey::sample()`](struct.SecretKey.html#impl-Distribution<SecretKey>). If you do not
+    /// need to specify your own RNG, you should use the
+    /// [`SecretKey::random()`](struct.SecretKey.html#method.random) constructor, which uses
+    /// [`rand::thread_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html) internally as its
+    /// RNG.
     pub fn random() -> Self {
         rand::random()
     }
@@ -406,6 +412,8 @@ impl SecretKey {
 #[derive(Clone, PartialEq, Eq, Default)]
 pub struct SecretKeyShare(SecretKey);
 
+/// Can be used to create a new random instance of `SecretKeyShare`. This is only useful for testing
+/// purposes as such a key has not been derived from a `SecretKeySet`.
 impl Distribution<SecretKeyShare> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKeyShare {
         SecretKeyShare(rng.gen())
@@ -633,7 +641,7 @@ impl From<Poly> for SecretKeySet {
 
 impl SecretKeySet {
     /// Creates a set of secret key shares, where any `threshold + 1` of them can collaboratively
-    /// sign and decrypt. This constuctor is identical to the `SecretKey::try_random()` in every
+    /// sign and decrypt. This constructor is identical to the `SecretKeySet::try_random()` in every
     /// way except that this constructor panics if the other returns an error.
     ///
     /// # Panic
@@ -645,7 +653,7 @@ impl SecretKeySet {
     }
 
     /// Creates a set of secret key shares, where any `threshold + 1` of them can collaboratively
-    /// sign and decrypt. This constuctor is identical to the `SecretKey::random()` in every
+    /// sign and decrypt. This constructor is identical to the `SecretKeySet::random()` in every
     /// way except that this constructor returns an `Err` where the `random` would panic.
     pub fn try_random<R: Rng>(threshold: usize, rng: &mut R) -> Result<Self> {
         Poly::try_random(threshold, rng).map(SecretKeySet::from)

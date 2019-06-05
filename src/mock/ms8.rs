@@ -1,4 +1,4 @@
-//! Eigth Mersenne prime field
+//! Eighth Mersenne prime field
 //!
 //! The eighth [Mersenne Prime](https://en.wikipedia.org/wiki/Mersenne_prime) (`MS8 := 2^31-1) can
 //! be used to construct a finite field supporting addition and multiplication. This module provides
@@ -43,7 +43,7 @@ fn modular_pow(base: u32, mut exp: u32, modulus: u32) -> u32 {
     result as u32
 }
 
-/// Eigth Mersenne prime, aka `i32::MAX`.
+/// Eighth Mersenne prime, aka `i32::MAX`.
 pub const MS8: u32 = 0x7fff_ffff;
 
 /// Eighth Mersenne prime field element

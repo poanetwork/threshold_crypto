@@ -34,7 +34,7 @@ pub(crate) trait ContainsSecret {
     }
 }
 
-/// A wrapper around temporary values to ensuer that they are cleared on drop.
+/// A wrapper around temporary values to ensure that they are cleared on drop.
 ///
 /// `Safe<T>` is meant to be used a wrapper around `T`, where `T` is  either an `&mut U` or
 /// `Box<U>`.
