@@ -10,7 +10,7 @@ type Msg = String;
 
 // The database schema that validator nodes use to store messages they receive from users.
 // Messages are first indexed numerically by user ID then alphabetically by message. Each message
-// is mapped to its list of valdidator signatures.
+// is mapped to its list of validator signatures.
 type MsgDatabase = BTreeMap<UserId, BTreeMap<Msg, Vec<NodeSignature>>>;
 
 // An append-only list of chat message "blocks". Each block contains the user ID for the user who

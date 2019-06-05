@@ -816,7 +816,7 @@ mod tests {
         let faulty_num = 2;
 
         // For distributed key generation, a number of dealers, only one of who needs to be honest,
-        // generates random bivariate polynomials and publicly commits to them. In partice, the
+        // generates random bivariate polynomials and publicly commits to them. In practice, the
         // dealers can e.g. be any `faulty_num + 1` nodes.
         let bi_polys: Vec<BivarPoly> = (0..dealer_num)
             .map(|_| BivarPoly::random(faulty_num, &mut rng))
