@@ -434,7 +434,7 @@ mod tests {
     // otherwise unusual expressions, so the lint is disabled.
     #![allow(clippy::eq_op)]
     // Some test functions contain long lists of assertions. Clippy thinks they are too complex.
-    #![allow(clippy::cyclomatic_complexity)]
+    #![allow(clippy::cognitive_complexity)]
 
     use super::{ext_euclid, modular_pow, Mersenne8};
     use pairing::Field;
