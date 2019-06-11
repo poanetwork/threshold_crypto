@@ -4,14 +4,14 @@
 [![Documentation](https://docs.rs/threshold_crypto/badge.svg)](https://docs.rs/threshold_crypto)
 [![Build Status](https://travis-ci.org/poanetwork/threshold_crypto.svg?branch=master)](https://travis-ci.org/poanetwork/threshold_crypto)
 
-A pairing-based threshold cryptosystem for collaborative decryption and
-signatures.
+A pairing-based threshold cryptosystem for collaborative decryption and signatures.
 
-The `threshold_crypto` crate provides constructors for encrypted message handling. It utilizes the [`pairing`](https://crates.io/crates/pairing) elliptic curve library to create and enable reconstruction of public and private key shares. The elliptic curve arithmetic and pairings are based on [Boneh-Lynn-Shacham](https://www.iacr.org/archive/asiacrypt2001/22480516.pdf) (BLS12) signatures.
+The `threshold_crypto` crate provides cryptographic keys with methods for signing and encrypting messages, as well as key sets for _threshold_ signatures and threshold encryption.
 
-In a network environment, messages are signed and encrypted, and key and
-signature shares are distributed to network participants. A message can be
-decrypted and authenticated only with cooperation from at least `threshold +
+The threshold signature scheme is described in [Threshold Signatures, Multisignatures and Blind Signatures Based on the Gap-Diffie-Hellman-Group Signature Scheme](https://www.iacr.org/archive/pkc2003/25670031/25670031.pdf) by Alexandra Boldyreva. This paper extends [Boneh-Lynn-Shacham](https://www.iacr.org/archive/asiacrypt2001/22480516.pdf) signatures to the threshold setting. Message encryption uses the [scheme by Baek and Zhang](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.119.1717&rep=rep1&type=pdf).
+Our implementation is based on the [`pairing`](https://crates.io/crates/pairing) elliptic curve library.
+
+In a network environment, messages are signed and encrypted, and key and signature shares are distributed to network participants. A message can be decrypted and authenticated only with cooperation from at least `threshold +
 1` nodes.
 
 ## Security Audit
