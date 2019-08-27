@@ -322,10 +322,11 @@ impl Drop for SecretKey {
         self.zero_secret();
     }
 }
+
 /// A debug statement where the secret prime field element is redacted.
 impl fmt::Debug for SecretKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("SecretKey").field(&"...").finish()
+        f.debug_tuple("SecretKey").field(&DebugDots).finish()
     }
 }
 
@@ -422,7 +423,7 @@ impl Distribution<SecretKeyShare> for Standard {
 
 impl fmt::Debug for SecretKeyShare {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("SecretKeyShare").field(&"...").finish()
+        f.debug_tuple("SecretKeyShare").field(&DebugDots).finish()
     }
 }
 
@@ -519,7 +520,7 @@ impl Ciphertext {
 }
 
 /// A decryption share. A threshold of decryption shares can be used to decrypt a message.
-#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DecryptionShare(#[serde(with = "serde_impl::projective")] G1);
 
 impl Distribution<DecryptionShare> for Standard {
@@ -531,6 +532,12 @@ impl Distribution<DecryptionShare> for Standard {
 impl Hash for DecryptionShare {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.into_affine().into_compressed().as_ref().hash(state);
+    }
+}
+
+impl fmt::Debug for DecryptionShare {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("DecryptionShare").field(&DebugDots).finish()
     }
 }
 
@@ -771,6 +778,16 @@ fn into_fr_plus_1<I: IntoFr>(x: I) -> Fr {
     let mut result = Fr::one();
     result.add_assign(&x.into_fr());
     result
+}
+
+/// Type that implements `Debug` printing three dots. This can be used to hide the contents of a
+/// field in a `Debug` implementation.
+struct DebugDots;
+
+impl fmt::Debug for DebugDots {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "...")
+    }
 }
 
 #[cfg(test)]
