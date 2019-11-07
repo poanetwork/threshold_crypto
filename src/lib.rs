@@ -1038,7 +1038,7 @@ mod tests {
     #[test]
     fn test_codec() {
         use codec::{Decode, Encode};
-        use rand::distributions::{Alphanumeric, Distribution, Standard, Uniform};
+        use rand::distributions::{Distribution, Standard};
         use rand::thread_rng;
 
         macro_rules! assert_codec {

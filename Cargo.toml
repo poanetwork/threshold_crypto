@@ -30,7 +30,7 @@ rand04_compat = "0.1.1"
 rand_chacha = "0.1.1"
 serde = { version = "1.0.102", features = ["derive"] }
 tiny-keccak = "1.5.0"
-codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"], optional = true  }
+codec = { package = "parity-scale-codec", version = "1.0.6", default-features = false, features = ["derive"], optional = true  }
 bincode = { version = "1.2", optional = true }
 
 [dev-dependencies]
