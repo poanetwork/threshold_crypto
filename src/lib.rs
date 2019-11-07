@@ -32,18 +32,19 @@ use std::ptr::copy_nonoverlapping;
 
 use hex_fmt::HexFmt;
 use log::debug;
-use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field};
+use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field, PrimeField};
 use rand::distributions::{Distribution, Standard};
 use rand::{rngs::OsRng, Rng, SeedableRng};
 use rand04_compat::RngExt;
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use tiny_keccak::sha3_256;
+use zeroize::Zeroize;
 
 use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, FromBytesError, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
-use crate::secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
+use crate::secret::clear_fr;
 
 pub use crate::into_fr::IntoFr;
 
@@ -309,6 +310,19 @@ impl SignatureShare {
 #[derive(PartialEq, Eq)]
 pub struct SecretKey(Box<Fr>);
 
+impl Zeroize for SecretKey {
+    fn zeroize(&mut self) {
+        let mut repr = self.0.into_repr();
+        repr.0.zeroize();
+    }
+}
+
+impl Drop for SecretKey {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
 /// Creates a `SecretKey` containing the zero prime field element.
 impl Default for SecretKey {
     fn default() -> Self {
@@ -335,26 +349,10 @@ impl Clone for SecretKey {
     }
 }
 
-/// Zeroes out the memory allocated from the `SecretKey`'s field element.
-impl Drop for SecretKey {
-    fn drop(&mut self) {
-        self.zero_secret();
-    }
-}
-
 /// A debug statement where the secret prime field element is redacted.
 impl fmt::Debug for SecretKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("SecretKey").field(&DebugDots).finish()
-    }
-}
-
-impl ContainsSecret for SecretKey {
-    fn secret_memory(&self) -> MemRange {
-        MemRange {
-            ptr: &*self.0 as *const Fr as *mut u8,
-            n_bytes: FR_SIZE,
-        }
     }
 }
 
@@ -372,7 +370,7 @@ impl SecretKey {
         unsafe {
             copy_nonoverlapping(fr_ptr, &mut *boxed_fr as *mut Fr, 1);
         }
-        clear_fr(fr_ptr);
+        clear_fr(fr);
         SecretKey(boxed_fr)
     }
 
