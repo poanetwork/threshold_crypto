@@ -73,11 +73,7 @@ const ERR_OS_RNG: &str = "could not initialize the OS random number generator";
 #[cfg(feature = "codec-support")]
 impl_codec_for!(PublicKey);
 #[cfg(feature = "codec-support")]
-impl_codec_for!(PublicKeyShare);
-#[cfg(feature = "codec-support")]
 impl_codec_for!(Signature);
-#[cfg(feature = "codec-support")]
-impl_codec_for!(SignatureShare);
 #[cfg(feature = "codec-support")]
 impl_codec_for!(DecryptionShare);
 #[cfg(feature = "codec-support")]
@@ -165,6 +161,7 @@ impl PublicKey {
 }
 
 /// A public key share.
+#[cfg_attr(feature = "codec-support", derive(codec::Encode, codec::Decode))]
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct PublicKeyShare(PublicKey);
 
@@ -271,6 +268,7 @@ impl Signature {
 
 /// A signature share.
 // Note: Random signature shares can be generated for testing.
+#[cfg_attr(feature = "codec-support", derive(codec::Encode, codec::Decode))]
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SignatureShare(pub Signature);
 
