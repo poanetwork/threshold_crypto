@@ -44,8 +44,8 @@ pub struct Poly {
 
 impl Zeroize for Poly {
     fn zeroize(&mut self) {
-        for fr_ptr in self.coeff.iter_mut() {
-            clear_fr(fr_ptr)
+        for fr in self.coeff.iter_mut() {
+            clear_fr(fr)
         }
     }
 }
@@ -535,8 +535,8 @@ pub struct BivarPoly {
 
 impl Zeroize for BivarPoly {
     fn zeroize(&mut self) {
-        for fr_ptr in self.coeff.iter_mut() {
-            clear_fr(fr_ptr)
+        for fr in self.coeff.iter_mut() {
+            clear_fr(fr)
         }
         self.degree.zeroize();
     }

@@ -70,17 +70,6 @@ pub const SIG_SIZE: usize = 96;
 
 const ERR_OS_RNG: &str = "could not initialize the OS random number generator";
 
-#[cfg(feature = "codec-support")]
-impl_codec_for!(PublicKey);
-#[cfg(feature = "codec-support")]
-impl_codec_for!(Signature);
-#[cfg(feature = "codec-support")]
-impl_codec_for!(DecryptionShare);
-#[cfg(feature = "codec-support")]
-impl_codec_for!(PublicKeySet);
-#[cfg(feature = "codec-support")]
-impl_codec_for!(Ciphertext);
-
 /// A public key.
 #[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq)]
 pub struct PublicKey(#[serde(with = "serde_impl::projective")] G1);
@@ -1076,12 +1065,12 @@ mod tests {
 
     #[test]
     fn test_zeroize() {
-        let zero_pk = SecretKey::from_mut(&mut Fr::zero()).public_key();
+        let zero_sk = SecretKey::from_mut(&mut Fr::zero());
 
         let mut sk = SecretKey::random();
-        assert_ne!(zero_pk, sk.public_key());
+        assert_ne!(zero_sk, sk);
 
         sk.zeroize();
-        assert_eq!(zero_pk, sk.public_key());
+        assert_eq!(zero_sk, sk);
     }
 }

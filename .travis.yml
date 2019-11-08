@@ -1,12 +1,6 @@
 language: rust
 rust:
-  - 1.38.0
-  - stable
-  - beta
-  - nightly
-jobs:
-  allow_failures:
-    - rust: nightly
+  - 1.39.0
 cache:
   cargo: true
   timeout: 1200

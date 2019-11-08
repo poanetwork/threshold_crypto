@@ -17,3 +17,11 @@ macro_rules! impl_codec_for {
         }
     };
 }
+
+use crate::{Ciphertext, DecryptionShare, PublicKey, PublicKeySet, Signature};
+
+impl_codec_for!(PublicKey);
+impl_codec_for!(Signature);
+impl_codec_for!(DecryptionShare);
+impl_codec_for!(PublicKeySet);
+impl_codec_for!(Ciphertext);
