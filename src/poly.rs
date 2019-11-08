@@ -22,7 +22,7 @@ use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::{cmp, iter, ops};
 
-use pairing::{CurveAffine, CurveProjective, Field, PrimeField};
+use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 use rand04_compat::RngExt;
 use serde::{Deserialize, Serialize};
@@ -44,9 +44,8 @@ pub struct Poly {
 
 impl Zeroize for Poly {
     fn zeroize(&mut self) {
-        for fr in &self.coeff {
-            let mut repr = fr.into_repr();
-            repr.0.zeroize();
+        for fr_ptr in self.coeff.iter_mut() {
+            clear_fr(fr_ptr)
         }
     }
 }
@@ -536,9 +535,8 @@ pub struct BivarPoly {
 
 impl Zeroize for BivarPoly {
     fn zeroize(&mut self) {
-        for fr in &self.coeff {
-            let mut repr = fr.into_repr();
-            repr.0.zeroize();
+        for fr_ptr in self.coeff.iter_mut() {
+            clear_fr(fr_ptr)
         }
         self.degree.zeroize();
     }
@@ -773,10 +771,11 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{coeff_pos, BivarPoly, IntoFr, Poly};
-
-    use super::{Fr, G1Affine};
-    use pairing::{CurveAffine, Field};
+    use super::{Fr, G1Affine, G1};
+    use pairing::{CurveAffine, CurveProjective, Field};
     use rand;
+    use rand04_compat::RngExt;
+    use zeroize::Zeroize;
 
     #[test]
     fn test_coeff_pos() {
@@ -810,6 +809,25 @@ mod tests {
         }
         let interp = Poly::interpolate(samples);
         assert_eq!(interp, poly);
+    }
+
+    #[test]
+    fn test_zeroize() {
+        let mut poly = Poly::monomial(3) + Poly::monomial(2) - 1;
+        poly.zeroize();
+        assert!(poly.is_zero());
+
+        let mut bi_poly = BivarPoly::random(3, &mut rand::thread_rng());
+        let random_commitment = bi_poly.commitment();
+
+        bi_poly.zeroize();
+
+        let zero_commitment = bi_poly.commitment();
+        assert_ne!(random_commitment, zero_commitment);
+
+        let mut rng = rand::thread_rng();
+        let (x, y): (Fr, Fr) = (rng.gen04(), rng.gen04());
+        assert_eq!(zero_commitment.evaluate(x, y), G1::zero());
     }
 
     #[test]

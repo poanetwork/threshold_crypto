@@ -32,7 +32,7 @@ use std::ptr::copy_nonoverlapping;
 
 use hex_fmt::HexFmt;
 use log::debug;
-use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field, PrimeField};
+use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field};
 use rand::distributions::{Distribution, Standard};
 use rand::{rngs::OsRng, Rng, SeedableRng};
 use rand04_compat::RngExt;
@@ -312,8 +312,7 @@ pub struct SecretKey(Box<Fr>);
 
 impl Zeroize for SecretKey {
     fn zeroize(&mut self) {
-        let mut repr = self.0.into_repr();
-        repr.0.zeroize();
+        clear_fr(&mut *self.0)
     }
 }
 
@@ -1075,5 +1074,16 @@ mod tests {
     fn test_size() {
         assert_eq!(<G1Affine as CurveAffine>::Compressed::size(), PK_SIZE);
         assert_eq!(<G2Affine as CurveAffine>::Compressed::size(), SIG_SIZE);
+    }
+
+    #[test]
+    fn test_zeroize() {
+        let zero_pk = SecretKey::from_mut(&mut Fr::zero()).public_key();
+
+        let mut sk = SecretKey::random();
+        assert_ne!(zero_pk, sk.public_key());
+
+        sk.zeroize();
+        assert_eq!(zero_pk, sk.public_key());
     }
 }
