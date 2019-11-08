@@ -7,8 +7,9 @@ use crate::{Fr, FrRepr};
 
 /// Overwrites a single field element with zeros.
 pub(crate) fn clear_fr(fr: &mut Fr) {
-    let fr_repr_ptr = unsafe { &mut *(fr as *mut Fr as *mut FrRepr) };
-    fr_repr_ptr.0.zeroize();
+    // TODO: Remove this after pairing support `Zeroize`
+    let fr_repr = unsafe { &mut *(fr as *mut Fr as *mut FrRepr) };
+    fr_repr.0.zeroize();
 }
 
 #[cfg(test)]
