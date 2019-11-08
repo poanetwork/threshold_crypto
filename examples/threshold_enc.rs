@@ -147,7 +147,7 @@ fn main() {
     let ciphertext = pk.encrypt(msg);
     send_msg(society.get_actor(alice), ciphertext.clone());
     send_msg(society.get_actor(bob), ciphertext.clone());
-    send_msg(society.get_actor(clara), ciphertext.clone());
+    send_msg(society.get_actor(clara), ciphertext);
 
     // We start a meeting of the secret society. At the meeting, each actor contributes their
     // share of the decryption process to decrypt the ciphertext that they each received.

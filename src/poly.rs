@@ -20,18 +20,18 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use std::mem::size_of_val;
 use std::{cmp, iter, ops};
 
 use pairing::{CurveAffine, CurveProjective, Field};
 use rand::Rng;
 use rand04_compat::RngExt;
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, Result};
 use crate::into_fr::IntoFr;
-use crate::secret::{clear_fr, ContainsSecret, MemRange, Safe};
+use crate::secret::clear_fr;
 use crate::{Fr, G1Affine, G1};
 
 /// A univariate polynomial in the prime field.
@@ -40,6 +40,20 @@ pub struct Poly {
     /// The coefficients of a polynomial.
     #[serde(with = "super::serde_impl::field_vec")]
     pub(super) coeff: Vec<Fr>,
+}
+
+impl Zeroize for Poly {
+    fn zeroize(&mut self) {
+        for fr in self.coeff.iter_mut() {
+            clear_fr(fr)
+        }
+    }
+}
+
+impl Drop for Poly {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
 }
 
 /// Creates a new `Poly` with the same coefficients as another polynomial.
@@ -172,14 +186,15 @@ impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
         }
         let n_coeffs = self.coeff.len() + rhs.coeff.len() - 1;
         let mut coeffs = vec![Fr::zero(); n_coeffs];
-        let mut tmp = Safe::new(Box::new(Fr::zero()));
+        let mut tmp = Fr::zero();
         for (i, ca) in self.coeff.iter().enumerate() {
             for (j, cb) in rhs.coeff.iter().enumerate() {
-                *tmp = *ca;
+                tmp = *ca;
                 tmp.mul_assign(cb);
-                coeffs[i + j].add_assign(&*tmp);
+                coeffs[i + j].add_assign(&tmp);
             }
         }
+        clear_fr(&mut tmp);
         Poly::from(coeffs)
     }
 }
@@ -201,7 +216,7 @@ impl<B: Borrow<Self>> ops::MulAssign<B> for Poly {
 impl ops::MulAssign<Fr> for Poly {
     fn mul_assign(&mut self, rhs: Fr) {
         if rhs.is_zero() {
-            self.zero_secret();
+            self.zeroize();
             self.coeff.clear();
         } else {
             for c in &mut self.coeff {
@@ -216,7 +231,7 @@ impl<'a> ops::Mul<&'a Fr> for Poly {
 
     fn mul(mut self, rhs: &Fr) -> Self::Output {
         if rhs.is_zero() {
-            self.zero_secret();
+            self.zeroize();
             self.coeff.clear();
         } else {
             self.coeff.iter_mut().for_each(|c| c.mul_assign(rhs));
@@ -258,25 +273,11 @@ impl ops::Mul<u64> for Poly {
     }
 }
 
-impl Drop for Poly {
-    fn drop(&mut self) {
-        self.zero_secret();
-    }
-}
-
 /// Creates a new `Poly` instance from a vector of prime field elements representing the
 /// coefficients of the polynomial.
 impl From<Vec<Fr>> for Poly {
     fn from(coeff: Vec<Fr>) -> Self {
         Poly { coeff }
-    }
-}
-
-impl ContainsSecret for Poly {
-    fn secret_memory(&self) -> MemRange {
-        let ptr = self.coeff.as_ptr() as *mut u8;
-        let n_bytes = size_of_val(self.coeff.as_slice());
-        MemRange { ptr, n_bytes }
     }
 }
 
@@ -318,13 +319,12 @@ impl Poly {
     }
 
     /// Returns the polynomial with constant value `c`.
-    pub fn constant(c: Fr) -> Self {
+    pub fn constant(mut c: Fr) -> Self {
         // We create a raw pointer to the field element within this method's stack frame so we can
         // overwrite that portion of memory with zeros once we have copied the element onto the
         // heap as part of the vector of polynomial coefficients.
-        let fr_ptr = &c as *const Fr;
         let poly = Poly::from(vec![c]);
-        clear_fr(fr_ptr);
+        clear_fr(&mut c);
         poly
     }
 
@@ -533,18 +533,27 @@ pub struct BivarPoly {
     coeff: Vec<Fr>,
 }
 
+impl Zeroize for BivarPoly {
+    fn zeroize(&mut self) {
+        for fr in self.coeff.iter_mut() {
+            clear_fr(fr)
+        }
+        self.degree.zeroize();
+    }
+}
+
+impl Drop for BivarPoly {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
 impl Clone for BivarPoly {
     fn clone(&self) -> Self {
         BivarPoly {
             degree: self.degree,
             coeff: self.coeff.clone(),
         }
-    }
-}
-
-impl Drop for BivarPoly {
-    fn drop(&mut self) {
-        self.zero_secret();
     }
 }
 
@@ -558,13 +567,6 @@ impl Debug for BivarPoly {
     }
 }
 
-impl ContainsSecret for BivarPoly {
-    fn secret_memory(&self) -> MemRange {
-        let ptr = self.coeff.as_ptr() as *const Fr as *mut u8;
-        let n_bytes = size_of_val(self.coeff.as_slice());
-        MemRange { ptr, n_bytes }
-    }
-}
 impl BivarPoly {
     /// Creates a random polynomial.
     ///
@@ -769,10 +771,11 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{coeff_pos, BivarPoly, IntoFr, Poly};
-
-    use super::{Fr, G1Affine};
-    use pairing::{CurveAffine, Field};
+    use super::{Fr, G1Affine, G1};
+    use pairing::{CurveAffine, CurveProjective, Field};
     use rand;
+    use rand04_compat::RngExt;
+    use zeroize::Zeroize;
 
     #[test]
     fn test_coeff_pos() {
@@ -806,6 +809,25 @@ mod tests {
         }
         let interp = Poly::interpolate(samples);
         assert_eq!(interp, poly);
+    }
+
+    #[test]
+    fn test_zeroize() {
+        let mut poly = Poly::monomial(3) + Poly::monomial(2) - 1;
+        poly.zeroize();
+        assert!(poly.is_zero());
+
+        let mut bi_poly = BivarPoly::random(3, &mut rand::thread_rng());
+        let random_commitment = bi_poly.commitment();
+
+        bi_poly.zeroize();
+
+        let zero_commitment = bi_poly.commitment();
+        assert_ne!(random_commitment, zero_commitment);
+
+        let mut rng = rand::thread_rng();
+        let (x, y): (Fr, Fr) = (rng.gen04(), rng.gen04());
+        assert_eq!(zero_commitment.evaluate(x, y), G1::zero());
     }
 
     #[test]

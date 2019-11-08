@@ -17,6 +17,10 @@ mod cmp_pairing;
 mod into_fr;
 mod secret;
 
+#[cfg(feature = "codec-support")]
+#[macro_use]
+mod codec_impl;
+
 pub mod error;
 pub mod poly;
 pub mod serde_impl;
@@ -35,16 +39,14 @@ use rand04_compat::RngExt;
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use tiny_keccak::sha3_256;
+use zeroize::Zeroize;
 
 use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, FromBytesError, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
-use crate::secret::{clear_fr, ContainsSecret, MemRange, FR_SIZE};
+use crate::secret::clear_fr;
 
 pub use crate::into_fr::IntoFr;
-
-#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
-pub use pairing::bls12_381::{Bls12 as PEngine, Fr, FrRepr, G1Affine, G2Affine, G1, G2};
 
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
 mod mock;
@@ -54,6 +56,9 @@ pub use crate::mock::{
     Mersenne8 as Fr, Mersenne8 as FrRepr, Mocktography as PEngine, Ms8Affine as G1Affine,
     Ms8Affine as G2Affine, Ms8Projective as G1, Ms8Projective as G2, PK_SIZE, SIG_SIZE,
 };
+
+#[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
+pub use pairing::bls12_381::{Bls12 as PEngine, Fr, FrRepr, G1Affine, G2Affine, G1, G2};
 
 /// The size of a key's representation in bytes.
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
@@ -145,6 +150,7 @@ impl PublicKey {
 }
 
 /// A public key share.
+#[cfg_attr(feature = "codec-support", derive(codec::Encode, codec::Decode))]
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct PublicKeyShare(PublicKey);
 
@@ -251,6 +257,7 @@ impl Signature {
 
 /// A signature share.
 // Note: Random signature shares can be generated for testing.
+#[cfg_attr(feature = "codec-support", derive(codec::Encode, codec::Decode))]
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SignatureShare(pub Signature);
 
@@ -290,6 +297,18 @@ impl SignatureShare {
 #[derive(PartialEq, Eq)]
 pub struct SecretKey(Box<Fr>);
 
+impl Zeroize for SecretKey {
+    fn zeroize(&mut self) {
+        clear_fr(&mut *self.0)
+    }
+}
+
+impl Drop for SecretKey {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
 /// Creates a `SecretKey` containing the zero prime field element.
 impl Default for SecretKey {
     fn default() -> Self {
@@ -316,26 +335,10 @@ impl Clone for SecretKey {
     }
 }
 
-/// Zeroes out the memory allocated from the `SecretKey`'s field element.
-impl Drop for SecretKey {
-    fn drop(&mut self) {
-        self.zero_secret();
-    }
-}
-
 /// A debug statement where the secret prime field element is redacted.
 impl fmt::Debug for SecretKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("SecretKey").field(&DebugDots).finish()
-    }
-}
-
-impl ContainsSecret for SecretKey {
-    fn secret_memory(&self) -> MemRange {
-        MemRange {
-            ptr: &*self.0 as *const Fr as *mut u8,
-            n_bytes: FR_SIZE,
-        }
     }
 }
 
@@ -353,7 +356,7 @@ impl SecretKey {
         unsafe {
             copy_nonoverlapping(fr_ptr, &mut *boxed_fr as *mut Fr, 1);
         }
-        clear_fr(fr_ptr);
+        clear_fr(fr);
         SecretKey(boxed_fr)
     }
 
@@ -1002,9 +1005,7 @@ mod tests {
 
     #[test]
     fn test_serde() {
-        use bincode;
-
-        let sk: SecretKey = random();
+        let sk = SecretKey::random();
         let sig = sk.sign("Please sign here: ______");
         let pk = sk.public_key();
         let ser_pk = bincode::serialize(&pk).expect("serialize public key");
@@ -1017,9 +1018,59 @@ mod tests {
         assert_eq!(sig, deser_sig);
     }
 
+    #[cfg(feature = "codec-support")]
+    #[test]
+    fn test_codec() {
+        use codec::{Decode, Encode};
+        use rand::distributions::{Distribution, Standard};
+        use rand::thread_rng;
+
+        macro_rules! assert_codec {
+            ($obj:expr, $type:ty) => {
+                let encoded: Vec<u8> = $obj.encode();
+                let decoded: $type = <$type>::decode(&mut &encoded[..]).unwrap();
+                assert_eq!(decoded, $obj.clone());
+            };
+        }
+
+        let sk = SecretKey::random();
+        let pk = sk.public_key();
+        assert_codec!(pk, PublicKey);
+
+        let pk_share = PublicKeyShare(pk);
+        assert_codec!(pk_share, PublicKeyShare);
+
+        let sig = sk.sign(b"this is a test");
+        assert_codec!(sig, Signature);
+
+        let sig_share = SignatureShare(sig);
+        assert_codec!(sig_share, SignatureShare);
+
+        let cipher_text = pk.encrypt(b"cipher text");
+        assert_codec!(cipher_text, Ciphertext);
+
+        let dec_share: DecryptionShare = Standard.sample(&mut thread_rng());
+        assert_codec!(dec_share, DecryptionShare);
+
+        let sk_set = SecretKeySet::random(3, &mut thread_rng());
+        let pk_set = sk_set.public_keys();
+        assert_codec!(pk_set, PublicKeySet);
+    }
+
     #[test]
     fn test_size() {
         assert_eq!(<G1Affine as CurveAffine>::Compressed::size(), PK_SIZE);
         assert_eq!(<G2Affine as CurveAffine>::Compressed::size(), SIG_SIZE);
+    }
+
+    #[test]
+    fn test_zeroize() {
+        let zero_sk = SecretKey::from_mut(&mut Fr::zero());
+
+        let mut sk = SecretKey::random();
+        assert_ne!(zero_sk, sk);
+
+        sk.zeroize();
+        assert_eq!(zero_sk, sk);
     }
 }

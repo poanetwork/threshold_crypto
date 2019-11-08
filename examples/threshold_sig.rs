@@ -216,7 +216,7 @@ fn main() {
     // message now has two signatures (which is `threshold + 1` signatures). The network runs a
     // round of consensus, which successfully creates a combined-signature for Alice's message.
     // Alice's message is appended to the chat log.
-    alice.send(network.get_mut_node(node2), alice_greeting.clone());
+    alice.send(network.get_mut_node(node2), alice_greeting);
     network.step();
     assert_eq!(network.chat_log.len(), 1);
 }
