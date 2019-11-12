@@ -22,9 +22,9 @@ use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::{cmp, iter, ops};
 
-use pairing::{CurveAffine, CurveProjective, Field};
+use ff::Field;
+use group::{CurveAffine, CurveProjective};
 use rand::Rng;
-use rand04_compat::RngExt;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -299,7 +299,7 @@ impl Poly {
         if degree == usize::max_value() {
             return Err(Error::DegreeTooHigh);
         }
-        let coeff: Vec<Fr> = rng.gen_iter04().take(degree + 1).collect();
+        let coeff: Vec<Fr> = crate::gen_fr_vec(rng, degree + 1);
         Ok(Poly::from(coeff))
     }
 
@@ -589,7 +589,7 @@ impl BivarPoly {
             .ok_or(Error::DegreeTooHigh)?;
         let poly = BivarPoly {
             degree,
-            coeff: rng.gen_iter04().take(len).collect(),
+            coeff: crate::gen_fr_vec(rng, len),
         };
         Ok(poly)
     }
@@ -772,9 +772,9 @@ mod tests {
 
     use super::{coeff_pos, BivarPoly, IntoFr, Poly};
     use super::{Fr, G1Affine, G1};
-    use pairing::{CurveAffine, CurveProjective, Field};
+    use ff::Field;
+    use group::{CurveAffine, CurveProjective};
     use rand;
-    use rand04_compat::RngExt;
     use zeroize::Zeroize;
 
     #[test]

@@ -15,15 +15,14 @@ pub(crate) fn clear_fr(fr: &mut Fr) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pairing::Field;
+    use ff::Field;
     use rand::thread_rng;
-    use rand04_compat::RngExt;
 
     #[test]
     fn test_clear() {
         let mut rng = thread_rng();
 
-        let mut fr: Fr = rng.gen04();
+        let mut fr: Fr = Fr::random(&mut rng);
         assert_ne!(fr, Fr::zero());
 
         clear_fr(&mut fr);

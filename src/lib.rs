@@ -29,13 +29,15 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ptr::copy_nonoverlapping;
+use std::vec::Vec;
 
+use ff::{Field, PrimeField};
+use group::{CurveAffine, CurveProjective, EncodedPoint};
 use hex_fmt::HexFmt;
 use log::debug;
-use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field};
+use pairing::Engine;
 use rand::distributions::{Distribution, Standard};
-use rand::{rngs::OsRng, Rng, SeedableRng};
-use rand04_compat::RngExt;
+use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use tiny_keccak::sha3_256;
@@ -68,7 +70,13 @@ pub const PK_SIZE: usize = 48;
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub const SIG_SIZE: usize = 96;
 
-const ERR_OS_RNG: &str = "could not initialize the OS random number generator";
+fn gen_fr_vec<T: RngCore>(rng: &mut T, len: usize) -> Vec<Fr> {
+    let mut v = Vec::new();
+    for _ in 0..len {
+        v.push(Fr::random(rng))
+    }
+    v
+}
 
 /// A public key.
 #[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq)]
@@ -117,12 +125,12 @@ impl PublicKey {
     /// Uses the `OsRng` by default. To pass in a custom random number generator, use
     /// `encrypt_with_rng()`.
     pub fn encrypt<M: AsRef<[u8]>>(&self, msg: M) -> Ciphertext {
-        self.encrypt_with_rng(&mut OsRng::new().expect(ERR_OS_RNG), msg)
+        self.encrypt_with_rng(&mut OsRng, msg)
     }
 
     /// Encrypts the message.
-    pub fn encrypt_with_rng<R: Rng, M: AsRef<[u8]>>(&self, rng: &mut R, msg: M) -> Ciphertext {
-        let r: Fr = rng.gen04();
+    pub fn encrypt_with_rng<R: RngCore, M: AsRef<[u8]>>(&self, rng: &mut R, msg: M) -> Ciphertext {
+        let r: Fr = Fr::random(rng);
         let u = G1Affine::one().mul(r);
         let v: Vec<u8> = {
             let g = self.0.into_affine().mul(r);
@@ -211,7 +219,7 @@ impl Ord for Signature {
 
 impl Distribution<Signature> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Signature {
-        Signature(rng.gen04())
+        Signature(G2::random(&mut ChaChaRng::from_rng(rng).unwrap()))
     }
 }
 
@@ -323,7 +331,14 @@ impl Distribution<SecretKey> for Standard {
     /// which uses [`rand::thread_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html)
     /// internally as its RNG.
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
-        SecretKey(Box::new(rng.gen04()))
+        // any way to use Fr::random(rng)?
+        let repr = FrRepr(rng.gen());
+        loop {
+            let fr_res = Fr::from_repr(repr);
+            if fr_res.is_ok() {
+                return SecretKey(Box::new(fr_res.unwrap()));
+            }
+        }
     }
 }
 
@@ -527,8 +542,8 @@ impl Ciphertext {
 pub struct DecryptionShare(#[serde(with = "serde_impl::projective")] G1);
 
 impl Distribution<DecryptionShare> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> DecryptionShare {
-        DecryptionShare(rng.gen04())
+    fn sample<R: RngCore + ?Sized>(&self, rng: &mut R) -> DecryptionShare {
+        DecryptionShare(G1::random(&mut ChaChaRng::from_rng(rng).unwrap()))
     }
 }
 
@@ -699,7 +714,7 @@ impl SecretKeySet {
 /// Returns a hash of the given message in `G2`.
 pub fn hash_g2<M: AsRef<[u8]>>(msg: M) -> G2 {
     let digest = sha3_256(msg.as_ref());
-    ChaChaRng::from_seed(digest).gen04()
+    G2::random(&mut ChaChaRng::from_seed(digest))
 }
 
 /// Returns a hash of the group element and message, in the second group.
@@ -718,7 +733,7 @@ fn hash_g1_g2<M: AsRef<[u8]>>(g1: G1, msg: M) -> G2 {
 /// Returns the bitwise xor of `bytes` with a sequence of pseudorandom bytes determined by `g1`.
 fn xor_with_hash(g1: G1, bytes: &[u8]) -> Vec<u8> {
     let digest = sha3_256(g1.into_affine().into_compressed().as_ref());
-    let mut rng = ChaChaRng::from_seed(digest);
+    let rng = ChaChaRng::from_seed(digest);
     let xor = |(a, b): (u8, &u8)| a ^ b;
     rng.sample_iter(&Standard).zip(bytes).map(xor).collect()
 }
@@ -800,7 +815,6 @@ mod tests {
     use std::collections::BTreeMap;
 
     use rand::{self, distributions::Standard, random, Rng};
-    use rand04_compat::rand04::random as random04;
 
     #[test]
     fn test_interpolate() {
@@ -970,8 +984,8 @@ mod tests {
         let msg: Vec<u8> = rng.sample_iter(&Standard).take(1000).collect();
         let msg_end0: Vec<u8> = msg.iter().chain(b"end0").cloned().collect();
         let msg_end1: Vec<u8> = msg.iter().chain(b"end1").cloned().collect();
-        let g0 = random04();
-        let g1 = random04();
+        let g0 = G1::random(&mut rng);
+        let g1 = G1::random(&mut rng);
 
         assert_eq!(hash_g1_g2(g0, &msg), hash_g1_g2(g0, &msg));
         assert_ne!(hash_g1_g2(g0, &msg), hash_g1_g2(g0, &msg_end0));
@@ -982,8 +996,9 @@ mod tests {
     /// Some basic sanity checks for the `hash_bytes` function.
     #[test]
     fn test_xor_with_hash() {
-        let g0 = random04();
-        let g1 = random04();
+        let mut rng = rand::thread_rng();
+        let g0 = G1::random(&mut rng);
+        let g1 = G1::random(&mut rng);
         let xwh = xor_with_hash;
         assert_eq!(xwh(g0, &[0; 5]), xwh(g0, &[0; 5]));
         assert_ne!(xwh(g0, &[0; 5]), xwh(g1, &[0; 5]));
