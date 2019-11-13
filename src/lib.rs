@@ -25,13 +25,14 @@ pub mod error;
 pub mod poly;
 pub mod serde_impl;
 
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ptr::copy_nonoverlapping;
 use std::vec::Vec;
 
-use ff::{Field, PrimeField};
+use ff::Field;
 use group::{CurveAffine, CurveProjective, EncodedPoint};
 use hex_fmt::HexFmt;
 use log::debug;
@@ -40,7 +41,6 @@ use rand::distributions::{Distribution, Standard};
 use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
-use tiny_keccak::sha3_256;
 use zeroize::Zeroize;
 
 use crate::cmp_pairing::cmp_projective;
@@ -49,6 +49,9 @@ use crate::poly::{Commitment, Poly};
 use crate::secret::clear_fr;
 
 pub use crate::into_fr::IntoFr;
+
+mod util;
+use util::sha3_256;
 
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
 mod mock;
@@ -295,11 +298,11 @@ impl SignatureShare {
 /// serialization in insecure contexts. To enable both use the `::serde_impl::SerdeSecret`
 /// wrapper which implements both `Deserialize` and `Serialize`.
 #[derive(PartialEq, Eq)]
-pub struct SecretKey(Box<Fr>);
+pub struct SecretKey(Fr);
 
 impl Zeroize for SecretKey {
     fn zeroize(&mut self) {
-        clear_fr(&mut *self.0)
+        clear_fr(&mut self.0)
     }
 }
 
@@ -323,21 +326,14 @@ impl Distribution<SecretKey> for Standard {
     /// which uses [`rand::thread_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html)
     /// internally as its RNG.
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
-        // any way to use Fr::random(rng)?
-        let repr = FrRepr(rng.gen());
-        loop {
-            let fr_res = Fr::from_repr(repr);
-            if fr_res.is_ok() {
-                return SecretKey(Box::new(fr_res.unwrap()));
-            }
-        }
+        SecretKey(Fr::random(&mut ChaChaRng::from_rng(rng).unwrap()))
     }
 }
 
 /// Creates a new `SecretKey` by cloning another `SecretKey`'s prime field element.
 impl Clone for SecretKey {
     fn clone(&self) -> Self {
-        let mut fr = *self.0;
+        let mut fr = self.0;
         SecretKey::from_mut(&mut fr)
     }
 }
@@ -359,12 +355,12 @@ impl SecretKey {
     /// has been copied onto the heap.
     pub fn from_mut(fr: &mut Fr) -> Self {
         let fr_ptr = fr as *mut Fr;
-        let mut boxed_fr = Box::new(Fr::zero());
+        let mut res_fr = Fr::zero();
         unsafe {
-            copy_nonoverlapping(fr_ptr, &mut *boxed_fr as *mut Fr, 1);
+            copy_nonoverlapping(fr_ptr, &mut res_fr as *mut Fr, 1);
         }
         clear_fr(fr);
-        SecretKey(boxed_fr)
+        SecretKey(res_fr)
     }
 
     /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
@@ -380,12 +376,12 @@ impl SecretKey {
 
     /// Returns the matching public key.
     pub fn public_key(&self) -> PublicKey {
-        PublicKey(G1Affine::one().mul(*self.0))
+        PublicKey(G1Affine::one().mul(self.0))
     }
 
     /// Signs the given element of `G2`.
     pub fn sign_g2<H: Into<G2Affine>>(&self, hash: H) -> Signature {
-        Signature(hash.into().mul(*self.0))
+        Signature(hash.into().mul(self.0))
     }
 
     /// Signs the given message.
@@ -401,7 +397,7 @@ impl SecretKey {
             return None;
         }
         let Ciphertext(ref u, ref v, _) = *ct;
-        let g = u.into_affine().mul(*self.0);
+        let g = u.into_affine().mul(self.0);
         Some(xor_with_hash(g, v))
     }
 
@@ -474,7 +470,7 @@ impl SecretKeyShare {
 
     /// Returns a decryption share, without validating the ciphertext.
     pub fn decrypt_share_no_verify(&self, ct: &Ciphertext) -> DecryptionShare {
-        DecryptionShare(ct.0.into_affine().mul(*(self.0).0))
+        DecryptionShare(ct.0.into_affine().mul((self.0).0))
     }
 
     /// Generates a non-redacted debug string. This method differs from
@@ -729,8 +725,6 @@ fn xor_with_hash(g1: G1, bytes: &[u8]) -> Vec<u8> {
     let xor = |(a, b): (u8, &u8)| a ^ b;
     rng.sample_iter(&Standard).zip(bytes).map(xor).collect()
 }
-
-use std::borrow::Borrow;
 
 /// Given a list of `t + 1` samples `(i - 1, f(i) * g)` for a polynomial `f` of degree `t`, and a
 /// group generator `g`, returns `f(0) * g`.
@@ -1079,5 +1073,22 @@ mod tests {
 
         sk.zeroize();
         assert_eq!(zero_sk, sk);
+    }
+
+    #[test]
+    fn test_rng_seed() {
+        let sk1 = SecretKey::random();
+        let sk2 = SecretKey::random();
+
+        assert_ne!(sk1, sk2);
+        let mut seed = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut seed);
+
+        let mut rng = ChaChaRng::from_seed(seed);
+        let sk3: SecretKey = rng.sample(Standard);
+
+        let mut rng = ChaChaRng::from_seed(seed);
+        let sk4: SecretKey = rng.sample(Standard);
+        assert_eq!(sk3, sk4);
     }
 }

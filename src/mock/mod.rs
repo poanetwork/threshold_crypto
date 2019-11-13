@@ -17,6 +17,7 @@ use std::{fmt, mem, slice};
 use ff::{Field, PrimeField, ScalarEngine};
 use group::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError};
 use pairing::{Engine, PairingCurveAffine};
+use rand::RngCore;
 
 pub use self::ms8::Mersenne8;
 
@@ -51,15 +52,16 @@ impl fmt::Display for Ms8Projective {
     }
 }
 
-impl Ms8Affine {
-    fn random<R: rand::Rng>(rng: &mut R) -> Self {
-        Ms8Affine(rng.gen())
-    }
-}
+impl PairingCurveAffine for Ms8Affine {
+    type Prepared = Ms8Affine;
+    type Pair = Ms8Affine;
+    type PairingResult = Mersenne8;
 
-impl Ms8Projective {
-    fn random<R: rand::Rng>(rng: &mut R) -> Self {
-        Ms8Projective(rng.gen())
+    fn prepare(&self) -> Self::Prepared {
+        *self
+    }
+    fn pairing_with(&self, other: &Self::Pair) -> Self::PairingResult {
+        self.0 * other.0
     }
 }
 
@@ -94,6 +96,24 @@ impl Engine for Mocktography {
         G2: Into<Self::G2Affine>,
     {
         p.into().0 * q.into().0
+    }
+
+    fn miller_loop<'a, I>(_i: I) -> Self::Fqk
+    where
+        I: IntoIterator<
+            Item = &'a (
+                &'a <Self::G1Affine as PairingCurveAffine>::Prepared,
+                &'a <Self::G2Affine as PairingCurveAffine>::Prepared,
+            ),
+        >,
+    {
+        // Unused?
+        unimplemented!()
+    }
+
+    fn final_exponentiation(_: &Self::Fqk) -> Option<Self::Fqk> {
+        // Unused?
+        unimplemented!()
     }
 }
 
@@ -180,6 +200,10 @@ impl CurveProjective for Ms8Projective {
     type Scalar = Mersenne8;
     type Base = Mersenne8;
     type Affine = Ms8Affine;
+
+    fn random<R: RngCore>(rng: &mut R) -> Self {
+        Self(Mersenne8::random(rng))
+    }
 
     fn zero() -> Self {
         Ms8Projective(Mersenne8::zero())

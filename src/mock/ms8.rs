@@ -12,6 +12,7 @@ use std::{fmt, mem, ops};
 
 use byteorder::{BigEndian, ByteOrder};
 use ff::{Field, LegendreSymbol, PrimeField, PrimeFieldDecodingError, PrimeFieldRepr, SqrtField};
+use rand::RngCore;
 
 /// Modular exponentiation
 ///
@@ -189,13 +190,11 @@ impl fmt::Display for Mersenne8 {
     }
 }
 
-impl Mersenne8 {
-    fn random<R: rand::RngCore>(rng: &mut R) -> Self {
+impl Field for Mersenne8 {
+    fn random<R: RngCore>(rng: &mut R) -> Self {
         Mersenne8::from(rng.next_u32())
     }
-}
 
-impl Field for Mersenne8 {
     #[inline]
     fn zero() -> Self {
         Mersenne8(0)

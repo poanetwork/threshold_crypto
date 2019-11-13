@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use ff::Field;
 use threshold_crypto::poly::Poly;
 use threshold_crypto::Fr;
 
@@ -9,7 +10,6 @@ const RNG_SEED: [u8; 16] = *b"0123456789abcdef";
 mod poly_benches {
     use super::*;
     use rand::SeedableRng;
-    use rand04_compat::RngExt;
     use rand_xorshift::XorShiftRng;
 
     /// Benchmarks multiplication of two polynomials.
@@ -69,7 +69,7 @@ mod poly_benches {
         c.bench_function_over_inputs(
             "Polynomial interpolation",
             move |b, &&deg| {
-                let mut gen_tuple = |i: usize| (i, rng.gen04::<Fr>());
+                let mut gen_tuple = |i: usize| (i, Fr::random(&mut rng));
                 let rand_samples = move || (0..=deg).map(&mut gen_tuple).collect::<Vec<_>>();
                 b.iter_with_setup(rand_samples, Poly::interpolate)
             },
