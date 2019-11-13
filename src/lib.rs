@@ -297,7 +297,7 @@ impl SignatureShare {
 /// `SecretKey` implements `Deserialize` but not `Serialize` to avoid accidental
 /// serialization in insecure contexts. To enable both use the `::serde_impl::SerdeSecret`
 /// wrapper which implements both `Deserialize` and `Serialize`.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct SecretKey(Fr);
 
 impl Zeroize for SecretKey {
@@ -323,18 +323,10 @@ impl Default for SecretKey {
 impl Distribution<SecretKey> for Standard {
     /// Creates a new random instance of `SecretKey`. If you do not need to specify your own RNG,
     /// you should use the [`SecretKey::random()`](struct.SecretKey.html#method.random) constructor,
-    /// which uses [`rand::thread_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html)
+    /// which uses [`rand::thread_rng()`](https://docs.rs/rand/0.7.2/rand/fn.thread_rng.html)
     /// internally as its RNG.
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
         SecretKey(Fr::random(&mut ChaChaRng::from_rng(rng).unwrap()))
-    }
-}
-
-/// Creates a new `SecretKey` by cloning another `SecretKey`'s prime field element.
-impl Clone for SecretKey {
-    fn clone(&self) -> Self {
-        let mut fr = self.0;
-        SecretKey::from_mut(&mut fr)
     }
 }
 
@@ -368,7 +360,7 @@ impl SecretKey {
     /// [`SecretKey::sample()`](struct.SecretKey.html#impl-Distribution<SecretKey>). If you do not
     /// need to specify your own RNG, you should use the
     /// [`SecretKey::random()`](struct.SecretKey.html#method.random) constructor, which uses
-    /// [`rand::thread_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html) internally as its
+    /// [`rand::thread_rng()`](https://docs.rs/rand/0.7.2/rand/fn.thread_rng.html) internally as its
     /// RNG.
     pub fn random() -> Self {
         rand::random()
