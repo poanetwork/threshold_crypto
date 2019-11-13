@@ -319,7 +319,11 @@ pub(crate) mod field_vec {
 
 #[cfg(test)]
 mod tests {
+    use std::iter::repeat_with;
+
     use bincode;
+    use ff::Field;
+    use group::CurveProjective;
     use rand;
     use serde::{Deserialize, Serialize};
 
@@ -344,8 +348,8 @@ mod tests {
     fn vecs() {
         let mut rng = rand::thread_rng();
         let vecs = Vecs {
-            curve_points: rng.gen_iter().take(10).collect(),
-            field_elements: rng.gen_iter().take(10).collect(),
+            curve_points: repeat_with(|| G1::random(&mut rng)).take(10).collect(),
+            field_elements: repeat_with(|| Fr::random(&mut rng)).take(10).collect(),
         };
         let ser_vecs = bincode::serialize(&vecs).expect("serialize vecs");
         let de_vecs = bincode::deserialize(&ser_vecs).expect("deserialize vecs");

@@ -16,8 +16,7 @@ use std::{fmt, mem, slice};
 
 use ff::{Field, PrimeField, ScalarEngine};
 use group::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError};
-
-use super::Engine;
+use pairing::{Engine, PairingCurveAffine};
 
 pub use self::ms8::Mersenne8;
 

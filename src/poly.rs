@@ -20,6 +20,7 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::iter::repeat_with;
 use std::{cmp, iter, ops};
 
 use ff::Field;
@@ -299,7 +300,7 @@ impl Poly {
         if degree == usize::max_value() {
             return Err(Error::DegreeTooHigh);
         }
-        let coeff: Vec<Fr> = crate::gen_fr_vec(rng, degree + 1);
+        let coeff: Vec<Fr> = repeat_with(|| Fr::random(rng)).take(degree + 1).collect();
         Ok(Poly::from(coeff))
     }
 
@@ -589,7 +590,7 @@ impl BivarPoly {
             .ok_or(Error::DegreeTooHigh)?;
         let poly = BivarPoly {
             degree,
-            coeff: crate::gen_fr_vec(rng, len),
+            coeff: repeat_with(|| Fr::random(rng)).take(len).collect(),
         };
         Ok(poly)
     }
@@ -826,7 +827,7 @@ mod tests {
         assert_ne!(random_commitment, zero_commitment);
 
         let mut rng = rand::thread_rng();
-        let (x, y): (Fr, Fr) = (rng.gen04(), rng.gen04());
+        let (x, y): (Fr, Fr) = (Fr::random(&mut rng), Fr::random(&mut rng));
         assert_eq!(zero_commitment.evaluate(x, y), G1::zero());
     }
 

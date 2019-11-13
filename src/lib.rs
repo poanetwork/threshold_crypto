@@ -70,14 +70,6 @@ pub const PK_SIZE: usize = 48;
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub const SIG_SIZE: usize = 96;
 
-fn gen_fr_vec<T: RngCore>(rng: &mut T, len: usize) -> Vec<Fr> {
-    let mut v = Vec::new();
-    for _ in 0..len {
-        v.push(Fr::random(rng))
-    }
-    v
-}
-
 /// A public key.
 #[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq)]
 pub struct PublicKey(#[serde(with = "serde_impl::projective")] G1);
@@ -967,7 +959,7 @@ mod tests {
     /// Some basic sanity checks for the `hash_g2` function.
     #[test]
     fn test_hash_g2() {
-        let mut rng = rand::thread_rng();
+        let rng = rand::thread_rng();
         let msg: Vec<u8> = rng.sample_iter(&Standard).take(1000).collect();
         let msg_end0: Vec<u8> = msg.iter().chain(b"end0").cloned().collect();
         let msg_end1: Vec<u8> = msg.iter().chain(b"end1").cloned().collect();
