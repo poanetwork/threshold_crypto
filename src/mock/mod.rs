@@ -60,6 +60,7 @@ impl PairingCurveAffine for Ms8Affine {
     fn prepare(&self) -> Self::Prepared {
         *self
     }
+
     fn pairing_with(&self, other: &Self::Pair) -> Self::PairingResult {
         self.0 * other.0
     }
