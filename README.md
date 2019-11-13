@@ -16,7 +16,7 @@ In a network environment, messages are signed and encrypted, and key and signatu
 
 ## Security Audit
 
-An [official security audit](https://github.com/poanetwork/wiki/wiki/Threshold-Crypto-Audit) has been completed on `threshold_crypto` by [Jean-Philippe Aumasson](https://aumasson.jp/). No exploitable security issues were found, and potential improvements have been addressed. Outdated dependencies mentioned in the audit were updated in commit [54026f5](https://github.com/poanetwork/threshold_crypto/commit/54026f5fe7e0b5a52e446ac01a50469da1f15a71) with the exception of `rand`, which is currently pinned to version 0.4 (see [hbbft issue #145](https://github.com/poanetwork/hbbft/issues/145) for more information).
+An [official security audit](https://github.com/poanetwork/wiki/wiki/Threshold-Crypto-Audit) has been completed on `threshold_crypto` by [Jean-Philippe Aumasson](https://aumasson.jp/). No exploitable security issues were found, and potential improvements have been addressed. Outdated dependencies mentioned in the audit were updated in commit [54026f5](https://github.com/poanetwork/threshold_crypto/commit/54026f5fe7e0b5a52e446ac01a50469da1f15a71).
 
 ## Usage
 
