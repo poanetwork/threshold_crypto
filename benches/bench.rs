@@ -69,9 +69,14 @@ mod poly_benches {
         c.bench_function_over_inputs(
             "Polynomial interpolation",
             move |b, &&deg| {
-                let mut gen_tuple = |i: usize| (i, Fr::random(&mut rng));
-                let rand_samples = move || (0..=deg).map(&mut gen_tuple).collect::<Vec<_>>();
-                b.iter_with_setup(rand_samples, Poly::interpolate)
+                b.iter_with_setup(
+                    || {
+                        (0..=deg)
+                            .map(|i| (i, Fr::random(&mut rng)))
+                            .collect::<Vec<_>>()
+                    },
+                    Poly::interpolate,
+                )
             },
             &TEST_DEGREES,
         );
@@ -100,11 +105,8 @@ mod public_key_set_benches {
             move |b, &&threshold| {
                 let sk_set = SecretKeySet::random(threshold, &mut rng);
                 let pk_set = sk_set.public_keys();
-                let mut sig_parts: Vec<usize> = (0..=threshold).collect();
-                let pieces: &mut [usize] = &mut sig_parts;
-                let sigs: BTreeMap<_, _> = pieces
-                    .iter()
-                    .map(|&i| {
+                let sigs: BTreeMap<_, _> = (0..=threshold)
+                    .map(|i| {
                         let sig = sk_set.secret_key_share(i).sign(msg);
                         (i, sig)
                     })

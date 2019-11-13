@@ -36,7 +36,7 @@ use crate::secret::clear_fr;
 use crate::{Fr, G1Affine, G1};
 
 /// A univariate polynomial in the prime field.
-#[derive(Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Poly {
     /// The coefficients of a polynomial.
     #[serde(with = "super::serde_impl::field_vec")]
@@ -54,13 +54,6 @@ impl Zeroize for Poly {
 impl Drop for Poly {
     fn drop(&mut self) {
         self.zeroize();
-    }
-}
-
-/// Creates a new `Poly` with the same coefficients as another polynomial.
-impl Clone for Poly {
-    fn clone(&self) -> Self {
-        Poly::from(self.coeff.clone())
     }
 }
 
@@ -526,6 +519,7 @@ impl Commitment {
 ///
 /// This can be used for Verifiable Secret Sharing and Distributed Key Generation. See the module
 /// documentation for details.
+#[derive(Clone)]
 pub struct BivarPoly {
     /// The polynomial's degree in each of the two variables.
     degree: usize,
@@ -546,15 +540,6 @@ impl Zeroize for BivarPoly {
 impl Drop for BivarPoly {
     fn drop(&mut self) {
         self.zeroize();
-    }
-}
-
-impl Clone for BivarPoly {
-    fn clone(&self) -> Self {
-        BivarPoly {
-            degree: self.degree,
-            coeff: self.coeff.clone(),
-        }
     }
 }
 
