@@ -38,7 +38,7 @@ use hex_fmt::HexFmt;
 use log::debug;
 use pairing::Engine;
 use rand::distributions::{Distribution, Standard};
-use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
+use rand::{rngs::OsRng, CryptoRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
@@ -364,6 +364,11 @@ impl SecretKey {
     /// RNG.
     pub fn random() -> Self {
         rand::random()
+    }
+
+    /// Creates a new random instance of `SecretKey` with a random number generator
+    pub fn sample<R: RngCore + SeedableRng + CryptoRng>(&self, rng: &mut R) -> Self {
+        Self(Fr::random(rng))
     }
 
     /// Returns the matching public key.
