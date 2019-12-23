@@ -397,8 +397,7 @@ impl SecretKey {
     /// the `Debug` implementation in that it *does* leak the secret prime
     /// field element.
     pub fn reveal(&self) -> String {
-        let uncomp = self.public_key().0.into_affine().into_uncompressed();
-        format!("SecretKey({:0.10})", HexFmt(uncomp))
+        format!("SecretKey({:?})", self.0)
     }
 }
 
@@ -469,8 +468,7 @@ impl SecretKeyShare {
     /// the `Debug` implementation in that it *does* leak the secret prime
     /// field element.
     pub fn reveal(&self) -> String {
-        let uncomp = self.0.public_key().0.into_affine().into_uncompressed();
-        format!("SecretKeyShare({:0.10})", HexFmt(uncomp))
+        format!("SecretKeyShare({:?})", (self.0).0)
     }
 }
 
