@@ -29,7 +29,6 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::ptr::copy_nonoverlapping;
 use std::vec::Vec;
 
 use ff::Field;
@@ -346,13 +345,9 @@ impl SecretKey {
     /// *WARNING* this constructor will overwrite the referenced `Fr` element with zeros after it
     /// has been copied onto the heap.
     pub fn from_mut(fr: &mut Fr) -> Self {
-        let fr_ptr = fr as *mut Fr;
-        let mut res_fr = Fr::zero();
-        unsafe {
-            copy_nonoverlapping(fr_ptr, &mut res_fr as *mut Fr, 1);
-        }
+        let sk = SecretKey(*fr);
         clear_fr(fr);
-        SecretKey(res_fr)
+        sk
     }
 
     /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
