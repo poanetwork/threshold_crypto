@@ -202,7 +202,7 @@ impl CurveProjective for Ms8Projective {
     type Base = Mersenne8;
     type Affine = Ms8Affine;
 
-    fn random<R: RngCore>(rng: &mut R) -> Self {
+    fn random<R: RngCore + ?std::marker::Sized>(rng: &mut R) -> Self {
         Self(Mersenne8::random(rng))
     }
 

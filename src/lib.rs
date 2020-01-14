@@ -213,7 +213,7 @@ impl Ord for Signature {
 
 impl Distribution<Signature> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Signature {
-        Signature(G2::random(&mut ChaChaRng::from_rng(rng).unwrap()))
+        Signature(G2::random(rng))
     }
 }
 
@@ -325,7 +325,7 @@ impl Distribution<SecretKey> for Standard {
     /// which uses [`rand::thread_rng()`](https://docs.rs/rand/0.7.2/rand/fn.thread_rng.html)
     /// internally as its RNG.
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
-        SecretKey(Fr::random(&mut ChaChaRng::from_rng(rng).unwrap()))
+        SecretKey(Fr::random(rng))
     }
 }
 
@@ -516,7 +516,7 @@ pub struct DecryptionShare(#[serde(with = "serde_impl::projective")] G1);
 
 impl Distribution<DecryptionShare> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> DecryptionShare {
-        DecryptionShare(G1::random(&mut ChaChaRng::from_rng(rng).unwrap()))
+        DecryptionShare(G1::random(rng))
     }
 }
 
