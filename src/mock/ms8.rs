@@ -191,7 +191,7 @@ impl fmt::Display for Mersenne8 {
 }
 
 impl Field for Mersenne8 {
-    fn random<R: RngCore>(rng: &mut R) -> Self {
+    fn random<R: RngCore + ?Sized>(rng: &mut R) -> Self {
         Mersenne8::from(rng.next_u32())
     }
 

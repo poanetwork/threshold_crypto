@@ -321,10 +321,8 @@ pub(crate) mod field_vec {
 mod tests {
     use std::iter::repeat_with;
 
-    use bincode;
     use ff::Field;
     use group::CurveProjective;
-    use rand;
     use serde::{Deserialize, Serialize};
 
     use crate::poly::BivarPoly;

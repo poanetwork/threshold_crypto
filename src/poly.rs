@@ -760,7 +760,6 @@ mod tests {
     use super::{Fr, G1Affine, G1};
     use ff::Field;
     use group::{CurveAffine, CurveProjective};
-    use rand;
     use zeroize::Zeroize;
 
     #[test]
