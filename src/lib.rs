@@ -25,20 +25,21 @@ pub mod error;
 pub mod poly;
 pub mod serde_impl;
 
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::ptr::copy_nonoverlapping;
+use std::vec::Vec;
 
+use ff::Field;
+use group::{CurveAffine, CurveProjective, EncodedPoint};
 use hex_fmt::HexFmt;
 use log::debug;
-use pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine, Field};
+use pairing::Engine;
 use rand::distributions::{Distribution, Standard};
-use rand::{rngs::OsRng, Rng, SeedableRng};
-use rand04_compat::RngExt;
+use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
-use tiny_keccak::sha3_256;
 use zeroize::Zeroize;
 
 use crate::cmp_pairing::cmp_projective;
@@ -47,6 +48,9 @@ use crate::poly::{Commitment, Poly};
 use crate::secret::clear_fr;
 
 pub use crate::into_fr::IntoFr;
+
+mod util;
+use util::sha3_256;
 
 #[cfg(feature = "use-insecure-test-only-mock-crypto")]
 mod mock;
@@ -67,8 +71,6 @@ pub const PK_SIZE: usize = 48;
 /// The size of a signature's representation in bytes.
 #[cfg(not(feature = "use-insecure-test-only-mock-crypto"))]
 pub const SIG_SIZE: usize = 96;
-
-const ERR_OS_RNG: &str = "could not initialize the OS random number generator";
 
 /// A public key.
 #[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq)]
@@ -117,12 +119,12 @@ impl PublicKey {
     /// Uses the `OsRng` by default. To pass in a custom random number generator, use
     /// `encrypt_with_rng()`.
     pub fn encrypt<M: AsRef<[u8]>>(&self, msg: M) -> Ciphertext {
-        self.encrypt_with_rng(&mut OsRng::new().expect(ERR_OS_RNG), msg)
+        self.encrypt_with_rng(&mut OsRng, msg)
     }
 
     /// Encrypts the message.
-    pub fn encrypt_with_rng<R: Rng, M: AsRef<[u8]>>(&self, rng: &mut R, msg: M) -> Ciphertext {
-        let r: Fr = rng.gen04();
+    pub fn encrypt_with_rng<R: RngCore, M: AsRef<[u8]>>(&self, rng: &mut R, msg: M) -> Ciphertext {
+        let r: Fr = Fr::random(rng);
         let u = G1Affine::one().mul(r);
         let v: Vec<u8> = {
             let g = self.0.into_affine().mul(r);
@@ -211,7 +213,7 @@ impl Ord for Signature {
 
 impl Distribution<Signature> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Signature {
-        Signature(rng.gen04())
+        Signature(G2::random(rng))
     }
 }
 
@@ -294,12 +296,12 @@ impl SignatureShare {
 /// `SecretKey` implements `Deserialize` but not `Serialize` to avoid accidental
 /// serialization in insecure contexts. To enable both use the `::serde_impl::SerdeSecret`
 /// wrapper which implements both `Deserialize` and `Serialize`.
-#[derive(PartialEq, Eq)]
-pub struct SecretKey(Box<Fr>);
+#[derive(PartialEq, Eq, Clone)]
+pub struct SecretKey(Fr);
 
 impl Zeroize for SecretKey {
     fn zeroize(&mut self) {
-        clear_fr(&mut *self.0)
+        clear_fr(&mut self.0)
     }
 }
 
@@ -320,18 +322,10 @@ impl Default for SecretKey {
 impl Distribution<SecretKey> for Standard {
     /// Creates a new random instance of `SecretKey`. If you do not need to specify your own RNG,
     /// you should use the [`SecretKey::random()`](struct.SecretKey.html#method.random) constructor,
-    /// which uses [`rand::thread_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html)
+    /// which uses [`rand::thread_rng()`](https://docs.rs/rand/0.7.2/rand/fn.thread_rng.html)
     /// internally as its RNG.
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
-        SecretKey(Box::new(rng.gen04()))
-    }
-}
-
-/// Creates a new `SecretKey` by cloning another `SecretKey`'s prime field element.
-impl Clone for SecretKey {
-    fn clone(&self) -> Self {
-        let mut fr = *self.0;
-        SecretKey::from_mut(&mut fr)
+        SecretKey(Fr::random(rng))
     }
 }
 
@@ -351,13 +345,9 @@ impl SecretKey {
     /// *WARNING* this constructor will overwrite the referenced `Fr` element with zeros after it
     /// has been copied onto the heap.
     pub fn from_mut(fr: &mut Fr) -> Self {
-        let fr_ptr = fr as *mut Fr;
-        let mut boxed_fr = Box::new(Fr::zero());
-        unsafe {
-            copy_nonoverlapping(fr_ptr, &mut *boxed_fr as *mut Fr, 1);
-        }
+        let sk = SecretKey(*fr);
         clear_fr(fr);
-        SecretKey(boxed_fr)
+        sk
     }
 
     /// Creates a new random instance of `SecretKey`. If you want to use/define your own random
@@ -365,7 +355,7 @@ impl SecretKey {
     /// [`SecretKey::sample()`](struct.SecretKey.html#impl-Distribution<SecretKey>). If you do not
     /// need to specify your own RNG, you should use the
     /// [`SecretKey::random()`](struct.SecretKey.html#method.random) constructor, which uses
-    /// [`rand::thread_rng()`](https://docs.rs/rand/0.6.1/rand/fn.thread_rng.html) internally as its
+    /// [`rand::thread_rng()`](https://docs.rs/rand/0.7.2/rand/fn.thread_rng.html) internally as its
     /// RNG.
     pub fn random() -> Self {
         rand::random()
@@ -373,12 +363,12 @@ impl SecretKey {
 
     /// Returns the matching public key.
     pub fn public_key(&self) -> PublicKey {
-        PublicKey(G1Affine::one().mul(*self.0))
+        PublicKey(G1Affine::one().mul(self.0))
     }
 
     /// Signs the given element of `G2`.
     pub fn sign_g2<H: Into<G2Affine>>(&self, hash: H) -> Signature {
-        Signature(hash.into().mul(*self.0))
+        Signature(hash.into().mul(self.0))
     }
 
     /// Signs the given message.
@@ -394,7 +384,7 @@ impl SecretKey {
             return None;
         }
         let Ciphertext(ref u, ref v, _) = *ct;
-        let g = u.into_affine().mul(*self.0);
+        let g = u.into_affine().mul(self.0);
         Some(xor_with_hash(g, v))
     }
 
@@ -466,7 +456,7 @@ impl SecretKeyShare {
 
     /// Returns a decryption share, without validating the ciphertext.
     pub fn decrypt_share_no_verify(&self, ct: &Ciphertext) -> DecryptionShare {
-        DecryptionShare(ct.0.into_affine().mul(*(self.0).0))
+        DecryptionShare(ct.0.into_affine().mul((self.0).0))
     }
 
     /// Generates a non-redacted debug string. This method differs from
@@ -526,7 +516,7 @@ pub struct DecryptionShare(#[serde(with = "serde_impl::projective")] G1);
 
 impl Distribution<DecryptionShare> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> DecryptionShare {
-        DecryptionShare(rng.gen04())
+        DecryptionShare(G1::random(rng))
     }
 }
 
@@ -697,7 +687,7 @@ impl SecretKeySet {
 /// Returns a hash of the given message in `G2`.
 pub fn hash_g2<M: AsRef<[u8]>>(msg: M) -> G2 {
     let digest = sha3_256(msg.as_ref());
-    ChaChaRng::from_seed(digest).gen04()
+    G2::random(&mut ChaChaRng::from_seed(digest))
 }
 
 /// Returns a hash of the group element and message, in the second group.
@@ -716,12 +706,10 @@ fn hash_g1_g2<M: AsRef<[u8]>>(g1: G1, msg: M) -> G2 {
 /// Returns the bitwise xor of `bytes` with a sequence of pseudorandom bytes determined by `g1`.
 fn xor_with_hash(g1: G1, bytes: &[u8]) -> Vec<u8> {
     let digest = sha3_256(g1.into_affine().into_compressed().as_ref());
-    let mut rng = ChaChaRng::from_seed(digest);
+    let rng = ChaChaRng::from_seed(digest);
     let xor = |(a, b): (u8, &u8)| a ^ b;
     rng.sample_iter(&Standard).zip(bytes).map(xor).collect()
 }
-
-use std::borrow::Borrow;
 
 /// Given a list of `t + 1` samples `(i - 1, f(i) * g)` for a polynomial `f` of degree `t`, and a
 /// group generator `g`, returns `f(0) * g`.
@@ -798,7 +786,6 @@ mod tests {
     use std::collections::BTreeMap;
 
     use rand::{self, distributions::Standard, random, Rng};
-    use rand04_compat::rand04::random as random04;
 
     #[test]
     fn test_interpolate() {
@@ -951,7 +938,7 @@ mod tests {
     /// Some basic sanity checks for the `hash_g2` function.
     #[test]
     fn test_hash_g2() {
-        let mut rng = rand::thread_rng();
+        let rng = rand::thread_rng();
         let msg: Vec<u8> = rng.sample_iter(&Standard).take(1000).collect();
         let msg_end0: Vec<u8> = msg.iter().chain(b"end0").cloned().collect();
         let msg_end1: Vec<u8> = msg.iter().chain(b"end1").cloned().collect();
@@ -968,8 +955,8 @@ mod tests {
         let msg: Vec<u8> = rng.sample_iter(&Standard).take(1000).collect();
         let msg_end0: Vec<u8> = msg.iter().chain(b"end0").cloned().collect();
         let msg_end1: Vec<u8> = msg.iter().chain(b"end1").cloned().collect();
-        let g0 = random04();
-        let g1 = random04();
+        let g0 = G1::random(&mut rng);
+        let g1 = G1::random(&mut rng);
 
         assert_eq!(hash_g1_g2(g0, &msg), hash_g1_g2(g0, &msg));
         assert_ne!(hash_g1_g2(g0, &msg), hash_g1_g2(g0, &msg_end0));
@@ -980,8 +967,9 @@ mod tests {
     /// Some basic sanity checks for the `hash_bytes` function.
     #[test]
     fn test_xor_with_hash() {
-        let g0 = random04();
-        let g1 = random04();
+        let mut rng = rand::thread_rng();
+        let g0 = G1::random(&mut rng);
+        let g1 = G1::random(&mut rng);
         let xwh = xor_with_hash;
         assert_eq!(xwh(g0, &[0; 5]), xwh(g0, &[0; 5]));
         assert_ne!(xwh(g0, &[0; 5]), xwh(g1, &[0; 5]));
@@ -1070,5 +1058,22 @@ mod tests {
 
         sk.zeroize();
         assert_eq!(zero_sk, sk);
+    }
+
+    #[test]
+    fn test_rng_seed() {
+        let sk1 = SecretKey::random();
+        let sk2 = SecretKey::random();
+
+        assert_ne!(sk1, sk2);
+        let mut seed = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut seed);
+
+        let mut rng = ChaChaRng::from_seed(seed);
+        let sk3: SecretKey = rng.sample(Standard);
+
+        let mut rng = ChaChaRng::from_seed(seed);
+        let sk4: SecretKey = rng.sample(Standard);
+        assert_eq!(sk3, sk4);
     }
 }

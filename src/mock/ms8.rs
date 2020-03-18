@@ -11,10 +11,8 @@ use std::io::{self, Read, Write};
 use std::{fmt, mem, ops};
 
 use byteorder::{BigEndian, ByteOrder};
-use pairing::{
-    Field, LegendreSymbol, PrimeField, PrimeFieldDecodingError, PrimeFieldRepr, SqrtField,
-};
-use rand04_compat::rand04 as rand;
+use ff::{Field, LegendreSymbol, PrimeField, PrimeFieldDecodingError, PrimeFieldRepr, SqrtField};
+use rand::RngCore;
 
 /// Modular exponentiation
 ///
@@ -192,14 +190,11 @@ impl fmt::Display for Mersenne8 {
     }
 }
 
-impl rand::Rand for Mersenne8 {
-    #[inline]
-    fn rand<R: rand::Rng>(rng: &mut R) -> Self {
-        Mersenne8::from(<u32 as rand::Rand>::rand(rng))
-    }
-}
-
 impl Field for Mersenne8 {
+    fn random<R: RngCore + ?Sized>(rng: &mut R) -> Self {
+        Mersenne8::from(rng.next_u32())
+    }
+
     #[inline]
     fn zero() -> Self {
         Mersenne8(0)
@@ -437,7 +432,7 @@ mod tests {
     #![allow(clippy::cognitive_complexity)]
 
     use super::{ext_euclid, modular_pow, Mersenne8};
-    use pairing::Field;
+    use ff::Field;
 
     #[test]
     fn ext_euclid_simple() {

@@ -20,11 +20,12 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::iter::repeat_with;
 use std::{cmp, iter, ops};
 
-use pairing::{CurveAffine, CurveProjective, Field};
+use ff::Field;
+use group::{CurveAffine, CurveProjective};
 use rand::Rng;
-use rand04_compat::RngExt;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -35,7 +36,7 @@ use crate::secret::clear_fr;
 use crate::{Fr, G1Affine, G1};
 
 /// A univariate polynomial in the prime field.
-#[derive(Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Poly {
     /// The coefficients of a polynomial.
     #[serde(with = "super::serde_impl::field_vec")]
@@ -53,13 +54,6 @@ impl Zeroize for Poly {
 impl Drop for Poly {
     fn drop(&mut self) {
         self.zeroize();
-    }
-}
-
-/// Creates a new `Poly` with the same coefficients as another polynomial.
-impl Clone for Poly {
-    fn clone(&self) -> Self {
-        Poly::from(self.coeff.clone())
     }
 }
 
@@ -299,7 +293,7 @@ impl Poly {
         if degree == usize::max_value() {
             return Err(Error::DegreeTooHigh);
         }
-        let coeff: Vec<Fr> = rng.gen_iter04().take(degree + 1).collect();
+        let coeff: Vec<Fr> = repeat_with(|| Fr::random(rng)).take(degree + 1).collect();
         Ok(Poly::from(coeff))
     }
 
@@ -525,6 +519,7 @@ impl Commitment {
 ///
 /// This can be used for Verifiable Secret Sharing and Distributed Key Generation. See the module
 /// documentation for details.
+#[derive(Clone)]
 pub struct BivarPoly {
     /// The polynomial's degree in each of the two variables.
     degree: usize,
@@ -545,15 +540,6 @@ impl Zeroize for BivarPoly {
 impl Drop for BivarPoly {
     fn drop(&mut self) {
         self.zeroize();
-    }
-}
-
-impl Clone for BivarPoly {
-    fn clone(&self) -> Self {
-        BivarPoly {
-            degree: self.degree,
-            coeff: self.coeff.clone(),
-        }
     }
 }
 
@@ -589,7 +575,7 @@ impl BivarPoly {
             .ok_or(Error::DegreeTooHigh)?;
         let poly = BivarPoly {
             degree,
-            coeff: rng.gen_iter04().take(len).collect(),
+            coeff: repeat_with(|| Fr::random(rng)).take(len).collect(),
         };
         Ok(poly)
     }
@@ -772,9 +758,8 @@ mod tests {
 
     use super::{coeff_pos, BivarPoly, IntoFr, Poly};
     use super::{Fr, G1Affine, G1};
-    use pairing::{CurveAffine, CurveProjective, Field};
-    use rand;
-    use rand04_compat::RngExt;
+    use ff::Field;
+    use group::{CurveAffine, CurveProjective};
     use zeroize::Zeroize;
 
     #[test]
@@ -826,7 +811,7 @@ mod tests {
         assert_ne!(random_commitment, zero_commitment);
 
         let mut rng = rand::thread_rng();
-        let (x, y): (Fr, Fr) = (rng.gen04(), rng.gen04());
+        let (x, y): (Fr, Fr) = (Fr::random(&mut rng), Fr::random(&mut rng));
         assert_eq!(zero_commitment.evaluate(x, y), G1::zero());
     }
 

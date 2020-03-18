@@ -85,12 +85,12 @@ impl<'de> Deserialize<'de> for crate::SecretKey {
         D: Deserializer<'de>,
     {
         use crate::{Fr, FrRepr};
-        use pairing::PrimeField;
+        use ff::PrimeField;
         use serde::de;
 
         let mut fr = match Fr::from_repr(FrRepr(Deserialize::deserialize(deserializer)?)) {
             Ok(x) => x,
-            Err(pairing::PrimeFieldDecodingError::NotInField(_)) => {
+            Err(ff::PrimeFieldDecodingError::NotInField(_)) => {
                 return Err(de::Error::invalid_value(
                     de::Unexpected::Other(&"Number outside of prime field."),
                     &"Valid prime field element.",
@@ -104,7 +104,7 @@ impl<'de> Deserialize<'de> for crate::SecretKey {
 
 impl SerializeSecret for crate::SecretKey {
     fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use pairing::PrimeField;
+        use ff::PrimeField;
 
         Serialize::serialize(&self.0.into_repr().0, serializer)
     }
@@ -165,7 +165,7 @@ pub(crate) mod projective {
     use std::fmt;
     use std::marker::PhantomData;
 
-    use pairing::{CurveAffine, CurveProjective, EncodedPoint};
+    use group::{CurveAffine, CurveProjective, EncodedPoint};
     use serde::de::{Error as DeserializeError, SeqAccess, Visitor};
     use serde::{ser::SerializeTuple, Deserializer, Serializer};
 
@@ -224,7 +224,7 @@ pub(crate) mod projective_vec {
     use std::iter::FromIterator;
     use std::marker::PhantomData;
 
-    use pairing::CurveProjective;
+    use group::CurveProjective;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     use super::projective;
@@ -275,7 +275,7 @@ pub(crate) mod projective_vec {
 pub(crate) mod field_vec {
     use std::borrow::Borrow;
 
-    use pairing::PrimeField;
+    use ff::PrimeField;
     use serde::de::Error as DeserializeError;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -319,9 +319,10 @@ pub(crate) mod field_vec {
 
 #[cfg(test)]
 mod tests {
-    use bincode;
-    use rand;
-    use rand04_compat::RngExt;
+    use std::iter::repeat_with;
+
+    use ff::Field;
+    use group::CurveProjective;
     use serde::{Deserialize, Serialize};
 
     use crate::poly::BivarPoly;
@@ -345,8 +346,8 @@ mod tests {
     fn vecs() {
         let mut rng = rand::thread_rng();
         let vecs = Vecs {
-            curve_points: rng.gen_iter04().take(10).collect(),
-            field_elements: rng.gen_iter04().take(10).collect(),
+            curve_points: repeat_with(|| G1::random(&mut rng)).take(10).collect(),
+            field_elements: repeat_with(|| Fr::random(&mut rng)).take(10).collect(),
         };
         let ser_vecs = bincode::serialize(&vecs).expect("serialize vecs");
         let de_vecs = bincode::deserialize(&ser_vecs).expect("deserialize vecs");

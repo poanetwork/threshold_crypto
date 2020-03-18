@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use pairing::{CurveAffine, CurveProjective};
+use group::{CurveAffine, CurveProjective};
 
 /// Compares two curve elements and returns their `Ordering`.
 pub fn cmp_projective<G: CurveProjective>(x: &G, y: &G) -> Ordering {
