@@ -11,6 +11,8 @@
 )]
 #![warn(missing_docs)]
 
+pub use ff;
+pub use group;
 pub use pairing;
 
 mod cmp_pairing;
