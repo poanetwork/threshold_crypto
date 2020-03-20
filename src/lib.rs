@@ -625,6 +625,7 @@ impl PublicKeySet {
 }
 
 /// A secret key and an associated set of secret key shares.
+#[derive(Clone, PartialEq, Eq)]
 pub struct SecretKeySet {
     /// The coefficients of a polynomial whose value at `0` is the "master key", and value at
     /// `i + 1` is key share number `i`.
