@@ -20,7 +20,6 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1.3.4"
-failure = "0.1.7"
 ff = "0.6.0"
 group = "0.6.0"
 hex_fmt = "0.3.0"
@@ -29,6 +28,7 @@ pairing = "0.16.0"
 rand = "0.7.3"
 rand_chacha = "0.2.2"
 serde = { version = "1.0.104", features = ["derive"] }
+thiserror = "1.0.22"
 tiny-keccak = { version = "2.0.1", features = ["sha3"] }
 zeroize = "1.1.0"
 
