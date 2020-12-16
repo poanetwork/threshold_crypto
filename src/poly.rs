@@ -419,6 +419,7 @@ impl Poly {
     /// Generates a non-redacted debug string. This method differs from
     /// the `Debug` implementation in that it *does* leak the secret prime
     /// field elements.
+    #[cfg(debug_assertions)]
     pub fn reveal(&self) -> String {
         format!("Poly {{ coeff: {:?} }}", self.coeff)
     }
@@ -639,6 +640,7 @@ impl BivarPoly {
     /// Generates a non-redacted debug string. This method differs from the
     /// `Debug` implementation in that it *does* leak the the struct's
     /// internal state.
+    #[cfg(debug_assertions)]
     pub fn reveal(&self) -> String {
         format!(
             "BivarPoly {{ degree: {}, coeff: {:?} }}",

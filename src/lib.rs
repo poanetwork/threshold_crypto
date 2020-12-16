@@ -393,6 +393,7 @@ impl SecretKey {
     /// Generates a non-redacted debug string. This method differs from
     /// the `Debug` implementation in that it *does* leak the secret prime
     /// field element.
+    #[cfg(debug_assertions)]
     pub fn reveal(&self) -> String {
         format!("SecretKey({:?})", self.0)
     }
@@ -464,6 +465,7 @@ impl SecretKeyShare {
     /// Generates a non-redacted debug string. This method differs from
     /// the `Debug` implementation in that it *does* leak the secret prime
     /// field element.
+    #[cfg(debug_assertions)]
     pub fn reveal(&self) -> String {
         format!("SecretKeyShare({:?})", (self.0).0)
     }
