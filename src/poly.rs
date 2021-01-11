@@ -349,6 +349,14 @@ impl Poly {
         Poly::compute_interpolation(&samples)
     }
 
+    /// Returns the unique polynomial `f` of degree `samples.len() - 1` with the given values
+    /// `(x, f(x))`. Expects samples to be a vector of two tuple Field representation elements.
+    pub fn interpolate_from_fr(samples: Vec<(Fr, Fr)>) -> Self
+    {
+        Poly::compute_interpolation(&samples)
+    }
+
+
     /// Returns the degree.
     pub fn degree(&self) -> usize {
         self.coeff.len().saturating_sub(1)
