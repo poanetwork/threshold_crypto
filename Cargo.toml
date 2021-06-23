@@ -1,7 +1,7 @@
 [package]
 name = "threshold_crypto"
 # REMINDER: Update version in `README.md` when incrementing:
-version = "0.4.0"
+version = "0.4.1"
 authors = [
     "Vladimir Komendantskiy <komendantsky@gmail.com>",
     "Andreas Fackler <AndreasFackler@gmx.de>",

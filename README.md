@@ -24,7 +24,7 @@ An [official security audit](https://github.com/poanetwork/wiki/wiki/Threshold-C
 
 ```toml
 [dependencies]
-threshold_crypto = { version = "0.4", git = "https://github.com/poanetwork/threshold_crypto" }
+threshold_crypto = { version = "0.4.1", git = "https://github.com/poanetwork/threshold_crypto" }
 ```
 
 `main.rs`:
@@ -103,7 +103,7 @@ by third-parties as representing the consensus of the network.
 ### Documentation
 
 * [crate documentation](https://docs.rs/threshold_crypto/)
-* [crates.io package](https://crates.io/crates/threshold_crypto) 
+* [crates.io package](https://crates.io/crates/threshold_crypto)
 
 ## Performance
 
