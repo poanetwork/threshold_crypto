@@ -19,13 +19,14 @@ description = "Pairing threshold cryptography"
 edition = "2018"
 
 [dependencies]
-byteorder = "1.3.4"
-ff = "0.6.0"
-group = "0.6.0"
+# byteorder = "1.3.4"
+bls12_381 = { version = "0.8.0", default-features = false, features = ["alloc", "zeroize", "experimental", "pairings"]}
+ff = "0.13.0"
+group = "0.13.0"
 hex_fmt = "0.3.0"
-log = "0.4.8"
-pairing = "0.16.0"
-rand = "0.7.3"
+# log = "0.4.8"
+# pairing = "0.16.0"
+rand = "0.8.5"
 rand_chacha = "0.2.2"
 serde = { version = "1.0.104", features = ["derive"] }
 thiserror = "1.0.22"
