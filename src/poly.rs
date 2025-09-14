@@ -22,16 +22,16 @@ use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::{cmp, iter, ops};
 
+use core::ops::{AddAssign, Mul, MulAssign, SubAssign};
 use ff::Field;
-use rand::{Rng, RngCore};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
-use core::ops::{AddAssign, MulAssign, Mul, SubAssign};
 
 use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, Result};
-use crate::into_fr::IntoFr;
-use crate::{Scalar, G1Affine, G1Projective};
+use crate::into_fr::IntoScalar;
+use crate::{G1Affine, G1Projective, Scalar};
 
 /// A univariate polynomial in the prime field.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -113,7 +113,7 @@ impl<'a> ops::Add<u64> for Poly {
     type Output = Poly;
 
     fn add(self, rhs: u64) -> Self::Output {
-        self + rhs.into_fr()
+        self + rhs.into_scalar()
     }
 }
 
@@ -163,7 +163,7 @@ impl<'a> ops::Sub<u64> for Poly {
     type Output = Poly;
 
     fn sub(self, rhs: u64) -> Self::Output {
-        self - rhs.into_fr()
+        self - rhs.into_scalar()
     }
 }
 
@@ -263,7 +263,7 @@ impl ops::Mul<u64> for Poly {
     type Output = Poly;
 
     fn mul(self, rhs: u64) -> Self::Output {
-        self * rhs.into_fr()
+        self * rhs.into_scalar()
     }
 }
 
@@ -340,10 +340,10 @@ impl Poly {
     pub fn interpolate<T, U, I>(samples_repr: I) -> Self
     where
         I: IntoIterator<Item = (T, U)>,
-        T: IntoFr,
-        U: IntoFr,
+        T: IntoScalar,
+        U: IntoScalar,
     {
-        let convert = |(x, y): (T, U)| (x.into_fr(), y.into_fr());
+        let convert = |(x, y): (T, U)| (x.into_scalar(), y.into_scalar());
         let samples: Vec<(Scalar, Scalar)> = samples_repr.into_iter().map(convert).collect();
         Poly::compute_interpolation(&samples)
     }
@@ -354,12 +354,12 @@ impl Poly {
     }
 
     /// Returns the value at the point `i`.
-    pub fn evaluate<T: IntoFr>(&self, i: T) -> Scalar {
+    pub fn evaluate<T: IntoScalar>(&self, i: T) -> Scalar {
         let mut result = match self.coeff.last() {
             None => return Scalar::zero(),
             Some(c) => *c,
         };
-        let x = i.into_fr();
+        let x = i.into_scalar();
         for c in self.coeff.iter().rev().skip(1) {
             result.mul_assign(&x);
             result.add_assign(c);
@@ -379,7 +379,12 @@ impl Poly {
 
     /// Removes all trailing zero coefficients.
     fn remove_zeros(&mut self) {
-        let zeros = self.coeff.iter().rev().take_while(|c| bool::from(c.is_zero())).count();
+        let zeros = self
+            .coeff
+            .iter()
+            .rev()
+            .take_while(|c| bool::from(c.is_zero()))
+            .count();
         let len = self.coeff.len() - zeros;
         self.coeff.truncate(len);
     }
@@ -494,12 +499,12 @@ impl Commitment {
     }
 
     /// Returns the `i`-th public key share.
-    pub fn evaluate<T: IntoFr>(&self, i: T) -> G1Projective {
+    pub fn evaluate<T: IntoScalar>(&self, i: T) -> G1Projective {
         let mut result = match self.coeff.last() {
             None => return G1Projective::identity(),
             Some(c) => *c,
         };
-        let x = i.into_fr();
+        let x = i.into_scalar();
         for c in self.coeff.iter().rev().skip(1) {
             result.mul_assign(x);
             result.add_assign(c);
@@ -509,7 +514,12 @@ impl Commitment {
 
     /// Removes all trailing zero coefficients.
     fn remove_zeros(&mut self) {
-        let zeros = self.coeff.iter().rev().take_while(|c| bool::from(c.is_identity())).count();
+        let zeros = self
+            .coeff
+            .iter()
+            .rev()
+            .take_while(|c| bool::from(c.is_identity()))
+            .count();
         // let zeros = self.coeff.iter().rev().take_while(|c| c.is_zero()).count(); TODO cleanup
         let len = self.coeff.len() - zeros;
         self.coeff.truncate(len)
@@ -560,7 +570,7 @@ impl BivarPoly {
     /// # Panics
     ///
     /// Panics if the degree is too high for the coefficients to fit into a `Vec`.
-    pub fn random<R: Rng>(degree: usize, rng: &mut R) -> Self {
+    pub fn random<R: RngCore>(degree: usize, rng: &mut R) -> Self {
         BivarPoly::try_random(degree, rng).unwrap_or_else(|e| {
             panic!(
                 "Failed to create random `BivarPoly` of degree {}: {}",
@@ -570,18 +580,15 @@ impl BivarPoly {
     }
 
     /// Creates a random polynomial.
-    pub fn try_random<R: Rng>(degree: usize, rng: &mut R) -> Result<Self> {
+    pub fn try_random<R: RngCore>(degree: usize, rng: &mut R) -> Result<Self> {
         let len = coeff_pos(degree, degree)
             .and_then(|l| l.checked_add(1))
             .ok_or(Error::DegreeTooHigh)?;
         let mut coeff = Vec::with_capacity(len);
-        for _ in 0..=len-1 {
+        for _ in 0..=len - 1 {
             coeff.push(Scalar::random(&mut *rng));
         }
-        let poly = BivarPoly {
-            degree,
-            coeff,
-        };
+        let poly = BivarPoly { degree, coeff };
         Ok(poly)
     }
 
@@ -591,7 +598,7 @@ impl BivarPoly {
     }
 
     /// Returns the polynomial's value at the point `(x, y)`.
-    pub fn evaluate<T: IntoFr>(&self, x: T, y: T) -> Scalar {
+    pub fn evaluate<T: IntoScalar>(&self, x: T, y: T) -> Scalar {
         let x_pow = self.powers(x);
         let y_pow = self.powers(y);
         // TODO: Can we save a few multiplication steps here due to the symmetry?
@@ -609,7 +616,7 @@ impl BivarPoly {
     }
 
     /// Returns the `x`-th row, as a univariate polynomial.
-    pub fn row<T: IntoFr>(&self, x: T) -> Poly {
+    pub fn row<T: IntoScalar>(&self, x: T) -> Poly {
         let x_pow = self.powers(x);
         let coeff: Vec<Scalar> = (0..=self.degree)
             .map(|i| {
@@ -637,7 +644,7 @@ impl BivarPoly {
     }
 
     /// Returns the `0`-th to `degree`-th power of `x`.
-    fn powers<T: IntoFr>(&self, x: T) -> Vec<Scalar> {
+    fn powers<T: IntoScalar>(&self, x: T) -> Vec<Scalar> {
         powers(x, self.degree)
     }
 
@@ -695,7 +702,7 @@ impl BivarCommitment {
     }
 
     /// Returns the commitment's value at the point `(x, y)`.
-    pub fn evaluate<T: IntoFr>(&self, x: T, y: T) -> G1Projective {
+    pub fn evaluate<T: IntoScalar>(&self, x: T, y: T) -> G1Projective {
         let x_pow = self.powers(x);
         let y_pow = self.powers(y);
         // TODO: Can we save a few multiplication steps here due to the symmetry?
@@ -713,7 +720,7 @@ impl BivarCommitment {
     }
 
     /// Returns the `x`-th row, as a commitment to a univariate polynomial.
-    pub fn row<T: IntoFr>(&self, x: T) -> Commitment {
+    pub fn row<T: IntoScalar>(&self, x: T) -> Commitment {
         let x_pow = self.powers(x);
         let coeff: Vec<G1Projective> = (0..=self.degree)
             .map(|i| {
@@ -731,14 +738,14 @@ impl BivarCommitment {
     }
 
     /// Returns the `0`-th to `degree`-th power of `x`.
-    fn powers<T: IntoFr>(&self, x: T) -> Vec<Scalar> {
+    fn powers<T: IntoScalar>(&self, x: T) -> Vec<Scalar> {
         powers(x, self.degree)
     }
 }
 
 /// Returns the `0`-th to `degree`-th power of `x`.
-fn powers<T: IntoFr>(into_x: T, degree: usize) -> Vec<Scalar> {
-    let x = into_x.into_fr();
+fn powers<T: IntoScalar>(into_x: T, degree: usize) -> Vec<Scalar> {
+    let x = into_x.into_scalar();
     let mut x_pow_i = Scalar::one();
     iter::once(x_pow_i)
         .chain((0..degree).map(|_| {
@@ -759,13 +766,12 @@ pub(crate) fn coeff_pos(i: usize, j: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    use core::ops::{AddAssign, Mul};
     use std::collections::BTreeMap;
-    use core::ops::{Mul, AddAssign};
 
-    use super::{coeff_pos, BivarPoly, IntoFr, Poly};
-    use super::{Scalar, G1Affine, G1Projective};
+    use super::{coeff_pos, BivarPoly, IntoScalar, Poly};
+    use super::{G1Affine, G1Projective, Scalar};
     use ff::Field;
-    // use group::{CurveAffine, CurveProjective};
     use zeroize::Zeroize;
 
     #[test]
@@ -792,11 +798,11 @@ mod tests {
         let x_pow_1 = Poly::monomial(1);
         let poly = x_pow_3 * 5 + x_pow_1 - 2;
 
-        let coeff: Vec<_> = [-2, 1, 0, 5].iter().map(IntoFr::into_fr).collect();
+        let coeff: Vec<_> = [-2, 1, 0, 5].iter().map(IntoScalar::into_scalar).collect();
         assert_eq!(Poly { coeff }, poly);
         let samples = vec![(-1, -8), (2, 40), (3, 136), (5, 628)];
         for &(x, y) in &samples {
-            assert_eq!(y.into_fr(), poly.evaluate(x));
+            assert_eq!(y.into_scalar(), poly.evaluate(x));
         }
         let interp = Poly::interpolate(samples);
         assert_eq!(interp, poly);
@@ -858,7 +864,7 @@ mod tests {
 
                 // A cheating dealer who modified the polynomial would be detected.
                 let x_pow_2 = Poly::monomial(2);
-                let five = Poly::constant(5.into_fr());
+                let five = Poly::constant(5.into_scalar());
                 let wrong_poly = row_poly.clone() + x_pow_2 * five;
                 assert_ne!(wrong_poly.commitment(), row_commit);
 

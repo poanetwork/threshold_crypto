@@ -13,14 +13,14 @@
 
 // TODO: remove simulation mode (feature, code and readme)
 // TODO: update dependencies
-// TODO: add changelog file 
+// TODO: add changelog file
 // TODO: add github CI
 
-use core::ops::{Mul, MulAssign, AddAssign, SubAssign};
+use core::ops::{AddAssign, Mul, MulAssign, SubAssign};
 
+pub use bls12_381;
 use bls12_381::{G2Projective, Scalar};
 pub use ff;
-pub use bls12_381;
 use group::prime::PrimeCurve;
 use rand::rngs::OsRng;
 
@@ -49,17 +49,17 @@ use hex_fmt::HexFmt;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 // use rand::{rngs::OsRng, Rng, RngCore, SeedableRng};
-use rand_chacha::rand_core::{SeedableRng, RngCore};
+use group::{Curve, Group};
+use rand_chacha::rand_core::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
-use group::{Curve, Group};
 
 use crate::cmp_pairing::cmp_projective;
 use crate::error::{Error, FromBytesError, FromBytesResult, Result};
 use crate::poly::{Commitment, Poly};
 
-pub use crate::into_fr::IntoFr;
+pub use crate::into_fr::IntoScalar;
 
 mod util;
 use util::sha3_256;
@@ -582,7 +582,7 @@ impl PublicKeySet {
     }
 
     /// Returns the `i`-th public key share.
-    pub fn public_key_share<T: IntoFr>(&self, i: T) -> PublicKeyShare {
+    pub fn public_key_share<T: IntoScalar>(&self, i: T) -> PublicKeyShare {
         let value = self.commit.evaluate(into_fr_plus_1(i));
         PublicKeyShare(PublicKey(value))
     }
@@ -623,7 +623,7 @@ impl PublicKeySet {
     pub fn combine_signatures<'a, T, I>(&self, shares: I) -> Result<Signature>
     where
         I: IntoIterator<Item = (T, &'a SignatureShare)>,
-        T: IntoFr,
+        T: IntoScalar,
     {
         let samples = shares.into_iter().map(|(i, share)| (i, &(share.0).0));
         Ok(Signature(interpolate(self.commit.degree(), samples)?))
@@ -633,7 +633,7 @@ impl PublicKeySet {
     pub fn decrypt<'a, T, I>(&self, shares: I, ct: &Ciphertext) -> Result<Vec<u8>>
     where
         I: IntoIterator<Item = (T, &'a DecryptionShare)>,
-        T: IntoFr,
+        T: IntoScalar,
     {
         let samples = shares.into_iter().map(|(i, share)| (i, &share.0));
         let g = interpolate(self.commit.degree(), samples)?;
@@ -682,7 +682,7 @@ impl SecretKeySet {
     }
 
     /// Returns the `i`-th secret key share.
-    pub fn secret_key_share<T: IntoFr>(&self, i: T) -> SecretKeyShare {
+    pub fn secret_key_share<T: IntoScalar>(&self, i: T) -> SecretKeyShare {
         let mut fr = self.poly.evaluate(into_fr_plus_1(i));
         SecretKeyShare::from_mut(&mut fr)
     }
@@ -705,7 +705,6 @@ impl SecretKeySet {
 // TODO: add domain separation here
 /// Returns a hash of the given message in `G2`.
 pub fn hash_g2<M: AsRef<[u8]>>(msg: M) -> G2Projective {
-
     let digest = sha3_256(msg.as_ref());
     G2Projective::random(&mut ChaChaRng::from_seed(digest))
 }
@@ -737,7 +736,7 @@ fn interpolate<C, B, T, I>(t: usize, items: I) -> Result<C>
 where
     C: PrimeCurve<Scalar = Scalar>,
     I: IntoIterator<Item = (T, B)>,
-    T: IntoFr,
+    T: IntoScalar,
     B: Borrow<C>,
 {
     let samples: Vec<_> = items
@@ -784,9 +783,9 @@ where
 }
 
 // TODO: rename to into_scalar_plus_1
-fn into_fr_plus_1<I: IntoFr>(x: I) -> Scalar {
+fn into_fr_plus_1<I: IntoScalar>(x: I) -> Scalar {
     let mut result = Scalar::one();
-    result.add_assign(&x.into_fr());
+    result.add_assign(&x.into_scalar());
     result
 }
 

@@ -86,14 +86,14 @@ impl<'de> Deserialize<'de> for crate::SecretKey {
     {
         use crate::Scalar;
         use serde::de;
-        
+
         let bytes: [u8; 32] = Deserialize::deserialize(deserializer)?;
         match Option::from(Scalar::from_bytes(&bytes)) {
             None => Err(de::Error::invalid_value(
                 de::Unexpected::Other("Invalid scalar value"),
-                &"Valid scalar value"
+                &"Valid scalar value",
             )),
-            Some(s) => Ok(crate::SecretKey(s))
+            Some(s) => Ok(crate::SecretKey(s)),
         }
     }
 }
@@ -215,13 +215,13 @@ pub(crate) mod projective {
                     let len_err = || DeserializeError::invalid_length(i, &self);
                     *byte = seq.next_element()?.ok_or_else(len_err)?;
                 }
-                
+
                 let option = <C::Affine as GroupEncoding>::from_bytes(&compressed);
                 if option.is_some().into() {
                     let affine: C::Affine = option.unwrap();
                     Ok(affine.to_curve())
                 } else {
-                    Err(DeserializeError::custom(ERR_CODE)) 
+                    Err(DeserializeError::custom(ERR_CODE))
                 }
             }
         }
@@ -315,7 +315,7 @@ pub(crate) mod field_vec {
     impl<'de> Deserialize<'de> for FieldWrap<Scalar> {
         fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
             let s = Scalar::from_repr(Deserialize::deserialize(d)?);
-        
+
             if s.is_none().into() {
                 return Err(D::Error::custom("invalid field element representation"));
             }
@@ -367,7 +367,9 @@ mod tests {
 
         let mut rng = rand::thread_rng();
         let vecs = Vecs {
-            curve_points: repeat_with(|| G1Projective::random(&mut rng)).take(10).collect(),
+            curve_points: repeat_with(|| G1Projective::random(&mut rng))
+                .take(10)
+                .collect(),
             field_elements: repeat_with(|| Scalar::random(&mut rng)).take(10).collect(),
         };
         let ser_vecs = bincode::serialize(&vecs).expect("serialize vecs");

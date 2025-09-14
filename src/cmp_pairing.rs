@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 // TODO: this may be in group::cofactor::CofactorCurveAffine etc now
-use group::{GroupEncoding};
+use group::GroupEncoding;
 
 /// Compares two curve elements and returns their `Ordering`.
 pub fn cmp_projective<G: GroupEncoding>(x: &G, y: &G) -> Ordering {
