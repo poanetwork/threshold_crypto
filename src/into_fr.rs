@@ -48,7 +48,7 @@ impl IntoScalar for i64 {
     }
 }
 
-impl<'a, T: IntoScalar> IntoScalar for &'a T {
+impl<T: IntoScalar> IntoScalar for &T {
     fn into_scalar(self) -> Scalar {
         (*self).into_scalar()
     }

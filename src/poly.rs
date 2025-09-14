@@ -78,7 +78,7 @@ impl<B: Borrow<Poly>> ops::AddAssign<B> for Poly {
     }
 }
 
-impl<'a, B: Borrow<Poly>> ops::Add<B> for &'a Poly {
+impl<B: Borrow<Poly>> ops::Add<B> for &Poly {
     type Output = Poly;
 
     fn add(self, rhs: B) -> Poly {
@@ -95,7 +95,7 @@ impl<B: Borrow<Poly>> ops::Add<B> for Poly {
     }
 }
 
-impl<'a> ops::Add<Scalar> for Poly {
+impl ops::Add<Scalar> for Poly {
     type Output = Poly;
 
     fn add(mut self, rhs: Scalar) -> Self::Output {
@@ -109,7 +109,7 @@ impl<'a> ops::Add<Scalar> for Poly {
     }
 }
 
-impl<'a> ops::Add<u64> for Poly {
+impl ops::Add<u64> for Poly {
     type Output = Poly;
 
     fn add(self, rhs: u64) -> Self::Output {
@@ -132,7 +132,7 @@ impl<B: Borrow<Poly>> ops::SubAssign<B> for Poly {
     }
 }
 
-impl<'a, B: Borrow<Poly>> ops::Sub<B> for &'a Poly {
+impl<B: Borrow<Poly>> ops::Sub<B> for &Poly {
     type Output = Poly;
 
     fn sub(self, rhs: B) -> Poly {
@@ -151,7 +151,7 @@ impl<B: Borrow<Poly>> ops::Sub<B> for Poly {
 
 // Clippy thinks using `+` in a `Sub` implementation is suspicious.
 #[allow(clippy::suspicious_arithmetic_impl)]
-impl<'a> ops::Sub<Scalar> for Poly {
+impl ops::Sub<Scalar> for Poly {
     type Output = Poly;
 
     fn sub(self, rhs: Scalar) -> Self::Output {
@@ -159,7 +159,7 @@ impl<'a> ops::Sub<Scalar> for Poly {
     }
 }
 
-impl<'a> ops::Sub<u64> for Poly {
+impl ops::Sub<u64> for Poly {
     type Output = Poly;
 
     fn sub(self, rhs: u64) -> Self::Output {
@@ -169,7 +169,7 @@ impl<'a> ops::Sub<u64> for Poly {
 
 // Clippy thinks using any `+` and `-` in a `Mul` implementation is suspicious.
 #[allow(clippy::suspicious_arithmetic_impl)]
-impl<'a, B: Borrow<Poly>> ops::Mul<B> for &'a Poly {
+impl<B: Borrow<Poly>> ops::Mul<B> for &Poly {
     type Output = Poly;
 
     fn mul(self, rhs: B) -> Self::Output {
@@ -220,7 +220,7 @@ impl ops::MulAssign<Scalar> for Poly {
     }
 }
 
-impl<'a> ops::Mul<&'a Scalar> for Poly {
+impl ops::Mul<&Scalar> for Poly {
     type Output = Poly;
 
     fn mul(mut self, rhs: &Scalar) -> Self::Output {
@@ -251,7 +251,7 @@ impl<'a> ops::Mul<&'a Scalar> for &'a Poly {
     }
 }
 
-impl<'a> ops::Mul<Scalar> for &'a Poly {
+impl ops::Mul<Scalar> for &Poly {
     type Output = Poly;
 
     fn mul(self, rhs: Scalar) -> Self::Output {
@@ -290,7 +290,7 @@ impl Poly {
     /// constructor in every way except that this constructor will return an `Err` where
     /// `try_random` would return an error.
     pub fn try_random<R: RngCore>(degree: usize, rng: &mut R) -> Result<Self> {
-        if degree == usize::max_value() {
+        if degree == usize::MAX {
             return Err(Error::DegreeTooHigh);
         }
         let mut coeff = Vec::with_capacity(degree + 1);
@@ -328,8 +328,7 @@ impl Poly {
 
     /// Returns the (monic) monomial: `x.pow(degree)`.
     pub fn monomial(degree: usize) -> Self {
-        let coeff: Vec<Scalar> = iter::repeat(Scalar::zero())
-            .take(degree)
+        let coeff: Vec<Scalar> = iter::repeat_n(Scalar::zero(), degree)
             .chain(iter::once(Scalar::one()))
             .collect();
         Poly::from(coeff)
@@ -438,7 +437,7 @@ pub struct Commitment {
 
 impl PartialOrd for Commitment {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -475,7 +474,7 @@ impl<B: Borrow<Commitment>> ops::AddAssign<B> for Commitment {
     }
 }
 
-impl<'a, B: Borrow<Commitment>> ops::Add<B> for &'a Commitment {
+impl<B: Borrow<Commitment>> ops::Add<B> for &Commitment {
     type Output = Commitment;
 
     fn add(self, rhs: B) -> Commitment {

@@ -96,13 +96,10 @@ impl ChatNetwork {
                 .iter()
                 .fold(BTreeMap::new(), |mut all_pending, node| {
                     for (user_id, signed_msgs) in &node.pending {
-                        let user_msgs = all_pending.entry(*user_id).or_insert_with(BTreeMap::new);
+                        let user_msgs = all_pending.entry(*user_id).or_default();
                         for (msg, sigs) in signed_msgs.iter() {
                             let sigs = sigs.iter().cloned();
-                            user_msgs
-                                .entry(msg.to_string())
-                                .or_insert_with(Vec::new)
-                                .extend(sigs);
+                            user_msgs.entry(msg.to_string()).or_default().extend(sigs);
                         }
                     }
                     all_pending
@@ -164,9 +161,9 @@ impl Node {
         };
         self.pending
             .entry(user_id)
-            .or_insert_with(BTreeMap::new)
+            .or_default()
             .entry(msg)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(sig);
     }
 }

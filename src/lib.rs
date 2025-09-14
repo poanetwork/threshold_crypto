@@ -2,7 +2,7 @@
 
 // Clippy warns that it's dangerous to derive `PartialEq` and explicitly implement `Hash`, but the
 // `pairing::bls12_381` types don't implement `Hash`, so we can't derive it.
-#![allow(clippy::derive_hash_xor_eq)]
+#![allow(clippy::derived_hash_with_manual_eq)]
 // When using the mocktography, the resulting field elements become wrapped `u32`s, suddenly
 // triggering pass-by-reference warnings. They are conditionally disabled for this reason:
 #![cfg_attr(
@@ -103,7 +103,7 @@ impl fmt::Debug for PublicKey {
 
 impl PartialOrd for PublicKey {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -217,7 +217,7 @@ pub struct Signature(#[serde(with = "serde_impl::projective")] G2Projective);
 
 impl PartialOrd for Signature {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -503,7 +503,7 @@ impl Hash for Ciphertext {
 
 impl PartialOrd for Ciphertext {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -919,7 +919,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let sks = SecretKeySet::random(0, &mut rng);
         assert_eq!(0, sks.threshold());
-        assert!(SecretKeySet::try_random(usize::max_value(), &mut rng).is_err());
+        assert!(SecretKeySet::try_random(usize::MAX, &mut rng).is_err());
     }
 
     #[test]
@@ -966,7 +966,7 @@ mod tests {
 
         assert_eq!(hash_g2(&msg), hash_g2(&msg));
         assert_ne!(hash_g2(&msg), hash_g2(&msg_end0));
-        assert_ne!(hash_g2(&msg_end0), hash_g2(&msg_end1));
+        assert_ne!(hash_g2(&msg_end0), hash_g2(msg_end1));
     }
 
     /// Some basic sanity checks for the `hash_g1_g2` function.
@@ -981,7 +981,7 @@ mod tests {
 
         assert_eq!(hash_g1_g2(g0, &msg), hash_g1_g2(g0, &msg));
         assert_ne!(hash_g1_g2(g0, &msg), hash_g1_g2(g0, &msg_end0));
-        assert_ne!(hash_g1_g2(g0, &msg_end0), hash_g1_g2(g0, &msg_end1));
+        assert_ne!(hash_g1_g2(g0, &msg_end0), hash_g1_g2(g0, msg_end1));
         assert_ne!(hash_g1_g2(g0, &msg), hash_g1_g2(g1, &msg));
     }
 
