@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use threshold_crypto::{
+use threshold_bls::{
     PublicKeySet, PublicKeyShare, SecretKeySet, SecretKeyShare, Signature, SignatureShare,
 };
 

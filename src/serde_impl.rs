@@ -5,7 +5,7 @@ pub use self::field_vec::FieldWrap;
 use std::borrow::Cow;
 use std::ops::Deref;
 
-use crate::G1;
+use bls12_381::G1Projective;
 use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -84,21 +84,17 @@ impl<'de> Deserialize<'de> for crate::SecretKey {
     where
         D: Deserializer<'de>,
     {
-        use crate::{Fr, FrRepr};
-        use ff::PrimeField;
+        use crate::Scalar;
         use serde::de;
-
-        let mut fr = match Fr::from_repr(FrRepr(Deserialize::deserialize(deserializer)?)) {
-            Ok(x) => x,
-            Err(ff::PrimeFieldDecodingError::NotInField(_)) => {
-                return Err(de::Error::invalid_value(
-                    de::Unexpected::Other(&"Number outside of prime field."),
-                    &"Valid prime field element.",
-                ));
-            }
-        };
-
-        Ok(crate::SecretKey::from_mut(&mut fr))
+        
+        let bytes: [u8; 32] = Deserialize::deserialize(deserializer)?;
+        match Option::from(Scalar::from_bytes(&bytes)) {
+            None => Err(de::Error::invalid_value(
+                de::Unexpected::Other("Invalid scalar value"),
+                &"Valid scalar value"
+            )),
+            Some(s) => Ok(crate::SecretKey(s))
+        }
     }
 }
 
@@ -106,7 +102,7 @@ impl SerializeSecret for crate::SecretKey {
     fn serialize_secret<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use ff::PrimeField;
 
-        Serialize::serialize(&self.0.into_repr().0, serializer)
+        Serialize::serialize(&self.0.to_repr(), serializer)
     }
 }
 
@@ -115,9 +111,11 @@ impl<'de> Deserialize<'de> for crate::SecretKeyShare {
     where
         D: Deserializer<'de>,
     {
-        Ok(crate::SecretKeyShare(Deserialize::deserialize(
-            deserializer,
-        )?))
+        let inner: crate::SecretKey = Deserialize::deserialize(deserializer)?;
+        Ok(crate::SecretKeyShare(inner))
+        // Ok(crate::SecretKeyShare(Deserialize::deserialize(
+        //     deserializer,
+        // )?))
     }
 }
 
@@ -134,7 +132,7 @@ struct WireBivarCommitment<'a> {
     degree: usize,
     /// The commitments to the coefficients.
     #[serde(with = "projective_vec")]
-    coeff: Cow<'a, [G1]>,
+    coeff: Cow<'a, [G1Projective]>,
 }
 
 impl Serialize for BivarCommitment {
@@ -165,7 +163,9 @@ pub(crate) mod projective {
     use std::fmt;
     use std::marker::PhantomData;
 
-    use group::{CurveAffine, CurveProjective, EncodedPoint};
+    use group::prime::{PrimeCurve, PrimeCurveAffine};
+    use group::GroupEncoding;
+    // use group::{CurveAffine, CurveProjective, EncodedPoint};
     use serde::de::{Error as DeserializeError, SeqAccess, Visitor};
     use serde::{ser::SerializeTuple, Deserializer, Serializer};
 
@@ -174,46 +174,59 @@ pub(crate) mod projective {
     pub fn serialize<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        C: CurveProjective,
+        C: PrimeCurve,
     {
-        let len = <C::Affine as CurveAffine>::Compressed::size();
+        let bytes = c.to_affine().to_bytes();
+        let len = bytes.as_ref().len();
         let mut tup = s.serialize_tuple(len)?;
-        for byte in c.into_affine().into_compressed().as_ref() {
+        for byte in bytes.as_ref() {
             tup.serialize_element(byte)?;
         }
         tup.end()
+        // let len = <C::Affine as GroupEncoding>::Repr::size();
+        // let mut tup = s.serialize_tuple(len)?;
+        // for byte in c.into_affine().into_compressed().as_ref() {
+        //     tup.serialize_element(byte)?;
+        // }
+        // tup.end()
     }
 
     pub fn deserialize<'de, D, C>(d: D) -> Result<C, D::Error>
     where
         D: Deserializer<'de>,
-        C: CurveProjective,
+        C: PrimeCurve,
     {
         struct TupleVisitor<C> {
             _ph: PhantomData<C>,
         }
 
-        impl<'de, C: CurveProjective> Visitor<'de> for TupleVisitor<C> {
+        impl<'de, C: PrimeCurve> Visitor<'de> for TupleVisitor<C> {
             type Value = C;
 
             fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                let len = <C::Affine as CurveAffine>::Compressed::size();
+                let len = <C::Affine as GroupEncoding>::Repr::default().as_ref().len();
                 write!(f, "a tuple of size {}", len)
             }
 
             #[inline]
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<C, A::Error> {
-                let mut compressed = <C::Affine as CurveAffine>::Compressed::empty();
+                let mut compressed = <C::Affine as GroupEncoding>::Repr::default();
                 for (i, byte) in compressed.as_mut().iter_mut().enumerate() {
                     let len_err = || DeserializeError::invalid_length(i, &self);
                     *byte = seq.next_element()?.ok_or_else(len_err)?;
                 }
-                let to_err = |_| DeserializeError::custom(ERR_CODE);
-                Ok(compressed.into_affine().map_err(to_err)?.into_projective())
+                
+                let option = <C::Affine as GroupEncoding>::from_bytes(&compressed);
+                if option.is_some().into() {
+                    let affine: C::Affine = option.unwrap();
+                    Ok(affine.to_curve())
+                } else {
+                    Err(DeserializeError::custom(ERR_CODE)) 
+                }
             }
         }
 
-        let len = <C::Affine as CurveAffine>::Compressed::size();
+        let len = <C::Affine as GroupEncoding>::Repr::default().as_ref().len();
         d.deserialize_tuple(len, TupleVisitor { _ph: PhantomData })
     }
 }
@@ -224,7 +237,8 @@ pub(crate) mod projective_vec {
     use std::iter::FromIterator;
     use std::marker::PhantomData;
 
-    use group::CurveProjective;
+    use group::prime::PrimeCurve;
+    // use group::CurveProjective;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     use super::projective;
@@ -238,13 +252,13 @@ pub(crate) mod projective_vec {
         }
     }
 
-    impl<C: CurveProjective, B: Borrow<C>> Serialize for CurveWrap<C, B> {
+    impl<C: PrimeCurve, B: Borrow<C>> Serialize for CurveWrap<C, B> {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
             projective::serialize(self.0.borrow(), s)
         }
     }
 
-    impl<'de, C: CurveProjective> Deserialize<'de> for CurveWrap<C, C> {
+    impl<'de, C: PrimeCurve> Deserialize<'de> for CurveWrap<C, C> {
         fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
             Ok(CurveWrap::new(projective::deserialize(d)?))
         }
@@ -253,7 +267,7 @@ pub(crate) mod projective_vec {
     pub fn serialize<S, C, T>(vec: T, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        C: CurveProjective,
+        C: PrimeCurve,
         T: AsRef<[C]>,
     {
         let wrap_vec: Vec<CurveWrap<C, &C>> = vec.as_ref().iter().map(CurveWrap::new).collect();
@@ -263,7 +277,7 @@ pub(crate) mod projective_vec {
     pub fn deserialize<'de, D, C, T>(d: D) -> Result<T, D::Error>
     where
         D: Deserializer<'de>,
-        C: CurveProjective,
+        C: PrimeCurve,
         T: FromIterator<C>,
     {
         let wrap_vec = <Vec<CurveWrap<C, C>>>::deserialize(d)?;
@@ -275,44 +289,48 @@ pub(crate) mod projective_vec {
 pub(crate) mod field_vec {
     use std::borrow::Borrow;
 
+    use bls12_381::Scalar;
     use ff::PrimeField;
     use serde::de::Error as DeserializeError;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    use crate::{Fr, FrRepr};
+    // use crate::{Fr, FrRepr};
 
     /// A wrapper type to facilitate serialization and deserialization of field elements.
     pub struct FieldWrap<B>(pub B);
 
-    impl FieldWrap<Fr> {
+    impl FieldWrap<Scalar> {
         /// Returns the wrapped field element.
-        pub fn into_inner(self) -> Fr {
+        pub fn into_inner(self) -> Scalar {
             self.0
         }
     }
 
-    impl<B: Borrow<Fr>> Serialize for FieldWrap<B> {
+    impl<B: Borrow<Scalar>> Serialize for FieldWrap<B> {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-            self.0.borrow().into_repr().0.serialize(s)
+            self.0.borrow().to_repr().serialize(s)
         }
     }
 
-    impl<'de> Deserialize<'de> for FieldWrap<Fr> {
+    impl<'de> Deserialize<'de> for FieldWrap<Scalar> {
         fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-            let repr = FrRepr(Deserialize::deserialize(d)?);
-            Ok(FieldWrap(Fr::from_repr(repr).map_err(|_| {
-                D::Error::custom("invalid field element representation")
-            })?))
+            let s = Scalar::from_repr(Deserialize::deserialize(d)?);
+        
+            if s.is_none().into() {
+                return Err(D::Error::custom("invalid field element representation"));
+            }
+
+            Ok(FieldWrap(s.unwrap()))
         }
     }
 
-    pub fn serialize<S: Serializer>(vec: &[Fr], s: S) -> Result<S::Ok, S::Error> {
-        let wrap_vec: Vec<FieldWrap<&Fr>> = vec.iter().map(FieldWrap).collect();
+    pub fn serialize<S: Serializer>(vec: &[Scalar], s: S) -> Result<S::Ok, S::Error> {
+        let wrap_vec: Vec<FieldWrap<&Scalar>> = vec.iter().map(FieldWrap).collect();
         wrap_vec.serialize(s)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Fr>, D::Error> {
-        let wrap_vec = <Vec<FieldWrap<Fr>>>::deserialize(d)?;
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Scalar>, D::Error> {
+        let wrap_vec = <Vec<FieldWrap<Scalar>>>::deserialize(d)?;
         Ok(wrap_vec.into_iter().map(FieldWrap::into_inner).collect())
     }
 }
@@ -321,19 +339,20 @@ pub(crate) mod field_vec {
 mod tests {
     use std::iter::repeat_with;
 
+    use bls12_381::Scalar;
     use ff::Field;
-    use group::CurveProjective;
+    // use group::CurveProjective;
     use serde::{Deserialize, Serialize};
 
     use crate::poly::BivarPoly;
-    use crate::{Fr, G1};
+    use crate::G1Projective;
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Vecs {
         #[serde(with = "super::projective_vec")]
-        curve_points: Vec<G1>,
+        curve_points: Vec<G1Projective>,
         #[serde(with = "super::field_vec")]
-        field_elements: Vec<Fr>,
+        field_elements: Vec<Scalar>,
     }
 
     impl PartialEq for Vecs {
@@ -344,10 +363,12 @@ mod tests {
 
     #[test]
     fn vecs() {
+        use group::Group;
+
         let mut rng = rand::thread_rng();
         let vecs = Vecs {
-            curve_points: repeat_with(|| G1::random(&mut rng)).take(10).collect(),
-            field_elements: repeat_with(|| Fr::random(&mut rng)).take(10).collect(),
+            curve_points: repeat_with(|| G1Projective::random(&mut rng)).take(10).collect(),
+            field_elements: repeat_with(|| Scalar::random(&mut rng)).take(10).collect(),
         };
         let ser_vecs = bincode::serialize(&vecs).expect("serialize vecs");
         let de_vecs = bincode::deserialize(&ser_vecs).expect("deserialize vecs");

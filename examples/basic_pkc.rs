@@ -1,6 +1,6 @@
 use bincode::{deserialize, serialize};
 use serde::{Deserialize, Serialize};
-use threshold_crypto::{PublicKey, SecretKey, Signature};
+use threshold_bls::{PublicKey, SecretKey, Signature};
 
 #[derive(Deserialize, Serialize)]
 struct SignedMsg {
